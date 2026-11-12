@@ -1,0 +1,17 @@
+require('./build-downloads.cjs');
+require('./build-vendor.cjs');
+const fs=require('node:fs');
+const path=require('node:path');
+const dir=path.join(__dirname,'dist');
+const read=name=>fs.readFileSync(path.join(dir,name),'utf8').replace(/^\uFEFF/,'');
+let html=read('index.html');
+html=html.replace('<link rel="stylesheet" href="autopilot.css">',()=>'<style>'+read('autopilot.css')+'</style>');
+html=html.replace('<link rel="stylesheet" href="project-queue.css">',()=>'<style>'+read('project-queue.css')+'</style>');
+html=html.replace('<link rel="stylesheet" href="google-account.css">',()=>'<style>'+read('google-account.css')+'</style>');
+for(const name of ['csstree.js','html-package.js','project-normalizer.js','autopilot-ui.js','autopilot-recovery.js','project-queue-ui.js','google-account-ui.js']) html=html.replace('<script defer src="'+name+'"></script>',()=>'<script defer>'+read(name).replace(/<\/script/gi,'<\\/script')+'</script>');
+html=html.replace('<link rel="stylesheet" href="styles.css">',()=>'<style>'+read('styles.css')+'</style>');
+html=html.replace('<link rel="stylesheet" href="lifecycle.css">',()=>'<style>'+read('lifecycle.css')+'</style>');
+for(const name of ['purify.min.js','csstree.js','html-import.js','page-runtime.js','generator.js','link-placements.js','design-variants.js','ai-core.js','ai-ui.js','plugin-download.js','run-ui.js','campaign-ui.js','lifecycle-ui.js','app.js']) html=html.replace('<script src="'+name+'"></script>',()=>'<script>'+read(name).replace(/<\/script/gi,'<\\/script')+'</script>');
+const boots=html.match(/<script defer>[\s\S]*?<\/script>/g)||[];for(const boot of boots)html=html.replace(boot,'');html=html.replace('</body>',()=>boots.map(boot=>boot.replace('<script defer>','<script>')).join('\n')+'</body>');
+fs.writeFileSync(path.join(dir,'PagePoster.html'),html,'utf8');
+console.log('Portable tool: '+path.join(dir,'PagePoster.html'));

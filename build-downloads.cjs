@@ -1,0 +1,12 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const filename = 'pageposter-clean-links-1.1.1.zip';
+const bytes = fs.readFileSync(path.join(__dirname, 'assets', filename));
+const bridgeFilename='pageposter-bridge-0.2.1.zip';
+const bridgeBytes=fs.readFileSync(path.join(__dirname,'wordpress','pageposter-bridge',bridgeFilename));
+const currentBridge=require('./wordpress/pageposter-bridge/build-zip.cjs').buildArchive();
+if(!bridgeBytes.equals(currentBridge))throw Error('Bridge ZIP is stale. Run node wordpress/pageposter-bridge/build-zip.cjs before building downloads.');
+require('./server/lifecycle/plugin-integrity.cjs').expectedPackageIntegrity();
+const data = {cleanLinks: {filename, version: '1.1.1', base64: bytes.toString('base64')},bridge:{filename:bridgeFilename,version:'0.2.1',base64:bridgeBytes.toString('base64')}};
+fs.writeFileSync(path.join(__dirname, 'dist/plugin-download.js'), '(function(root){root.PagePosterDownloads=' + JSON.stringify(data) + ';}(typeof globalThis!=="undefined"?globalThis:this));\n');
+console.log('Bundled Clean Links 1.1.1: ' + bytes.length + ' bytes');

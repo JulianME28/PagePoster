@@ -1,0 +1,33 @@
+[
+  {
+    "file": "class-wp-html-attribute-token.php",
+    "source": "https://raw.githubusercontent.com/WordPress/wordpress-develop/6.2/src/wp-includes/html-api/class-wp-html-attribute-token.php",
+    "upstream_sha256": "616fa6406aa79648db7bec02e7c6914a0baef8270ab259d8a0fb41055b1383e3",
+    "changes": "Added PagePoster\\Compat namespace only."
+  },
+  {
+    "file": "class-wp-html-text-replacement.php",
+    "source": "https://raw.githubusercontent.com/WordPress/wordpress-develop/6.2/src/wp-includes/html-api/class-wp-html-text-replacement.php",
+    "upstream_sha256": "cd3749d246f5ad62e7053596050ab4677a904643f1373114950cdd492b7604f5",
+    "changes": "Added PagePoster\\Compat namespace only."
+  },
+  {
+    "file": "class-wp-html-span.php",
+    "source": "https://raw.githubusercontent.com/WordPress/wordpress-develop/6.2/src/wp-includes/html-api/class-wp-html-span.php",
+    "upstream_sha256": "5d95020c4aaf69affac7f7dbf8557da4ef486a74d4743fde3c7e703c8a938e0b",
+    "changes": "Added PagePoster\\Compat namespace only."
+  },
+  {
+    "file": "class-wp-html-tag-processor.php",
+    "source": "https://raw.githubusercontent.com/WordPress/wordpress-develop/6.2/src/wp-includes/html-api/class-wp-html-tag-processor.php",
+    "upstream_sha256": "dd6f4b688e30735bb21a98f982025c52379e538ac1ce041793bd731d747dc375",
+    "changes": "Added PagePoster\\Compat namespace only."
+  },
+  {
+    "file": "functions.php",
+    "sources": [
+      "https://raw.githubusercontent.com/WordPress/wordpress-develop/6.2/src/wp-includes/kses.php"
+    ],
+    "changes": "Private PHP string-prefix compatibility helper and URI-attribute wrapper using the WordPress 6.2 default list."
+  }
+]

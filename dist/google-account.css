@@ -1,0 +1,24 @@
+.ga-mode-label { margin-top: 18px; }
+.ga-card { margin: 12px 0 22px; padding: 16px; border: 1px solid #d5e3f5; border-radius: 12px; background: #f5f9ff; min-width: 0; }
+.ga-card[hidden], .ga-card [hidden], #ga-service[hidden] { display: none !important; }
+.ga-heading { display: flex; align-items: flex-start; gap: 11px; }
+.ga-heading > div { min-width: 0; }
+.ga-symbol { display: grid; place-items: center; flex: 0 0 32px; height: 32px; border-radius: 9px; background: #e6efff; color: #3267bd; font-size: 18px; font-weight: 700; }
+.ga-heading h4 { margin: 0 0 5px; color: #294b77; font-size: 14px; }
+.ga-heading p { margin: 0; color: #506785; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.ga-card .ap-fine { line-height: 1.65; }
+.ga-note { margin: 12px 0; padding: 10px 12px; border-radius: 8px; background: #fff; border: 1px solid #cdddf0; color: #4b6486; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.ga-note.error { color: #94442c; background: #fff6ef; border-color: #f0d0be; }
+.ga-setup { margin: 14px 0; font-size: 12px; line-height: 1.7; }
+.ga-setup summary { color: #3766a5; font-weight: 600; cursor: pointer; }
+.ga-setup ol { margin: 12px 0; padding-left: 22px; color: #4a617e; }
+.ga-setup li { margin: 8px 0; }
+.ga-card a { color: #3164ac; overflow-wrap: anywhere; }
+.ga-setup code { font-size: 11px; overflow-wrap: anywhere; word-break: break-word; }
+.ga-card .ga-file-label { margin: 14px 0 4px; }
+.ga-file-label input { width: 100%; min-width: 0; padding: 8px; background: #fff; font-size: 12px; }
+.ga-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 13px 0 0; }
+.ga-actions .ap-button { white-space: normal; }
+.ga-open-link { display: inline-block; margin-top: 12px; font-size: 12px; font-weight: 600; }
+.ga-save-help { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid #dce7f5; color: #4f6684; font-size: 12px; line-height: 1.65; }
+@media (max-width: 540px) { .ga-card { padding: 12px; } .ga-actions .ap-button { width: 100%; } .ga-file-label input { font-size: 12px; } }

@@ -1,0 +1,7 @@
+PagePoster Clean Links 1.1.2
+
+Fixes theme javascript: destinations and links added or rewritten by browser widgets after page load. Intended links inside PagePoster remain unchanged. Internal theme URLs and event handlers remain.
+
+Update this plugin in WordPress, clear page/CDN caches, reload the public page, and rerun the SEOquake report. Browser cleanup needs JavaScript and an inline-script policy permitting the runtime.
+
+This is a standalone repair package. PagePoster Bridge 0.2.0 strictly requires Clean Links 1.1.1; automatic publishing through that Bridge will require a separate compatibility update. Do not use this package on Bridge-managed sites until that integration is updated. Existing published pages can use this standalone repair. No database content, options, or theme files are modified.

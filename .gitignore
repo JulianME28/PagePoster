@@ -1,0 +1,28 @@
+node_modules/
+.site-workflow/
+*.tar.gz
+
+.env
+.env.*
+!.env.example
+
+# Local persistent runtime and protected keys
+.pageposter/
+
+# Desktop build tools and local distribution metadata
+.desktop-build/
+desktop/node_modules/
+desktop/bootstrap.json
+desktop/google-client.json
+desktop/.google-client-*.tmp
+*.log
+
+# Local operational notes with client sites or account details
+docs/PROJECT_CONTEXT.md
+docs/START-WORK-2026-11-01.txt
+docs/bundled-google-client-2026-10-22.txt
+docs/doctors-login-2026-10-26.md
+docs/manual-destination-domain-fix-2026-10-22.txt
+docs/ready-html-copy-2026-10-22.txt
+docs/standalone-canvas-2026-10-22.txt
+docs/wordpress-click-flow-2026-10-26.md
