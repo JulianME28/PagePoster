@@ -23,7 +23,7 @@ export function createVisibleWordPress({chromium=runtime(),executablePath=execut
   if(!chromium||!executablePath)fail('BROWSER_UNAVAILABLE');let browser;
   try{browser=await chromium.launch({executablePath,headless:options.headless??headless,timeout:20000,args:['--incognito','--disable-background-networking','--disable-component-update','--disable-sync','--no-first-run','--disable-features=MediaRouter','--host-resolver-rules=MAP * ~NOTFOUND','--force-webrtc-ip-handling-policy=disable_non_proxied_udp']});}catch{fail('BROWSER_UNAVAILABLE');}
   const context=await browser.newContext({viewport:null,javaScriptEnabled:false,serviceWorkers:'block',acceptDownloads:false});
-  const page=await context.newPage();page.setDefaultTimeout(15000);let pending=null,closed=false,resourceCount=0,message='PagePoster · Подключаемся к WordPress',authenticated=false;
+  const page=await context.newPage();page.setDefaultTimeout(15000);let pending=null,closed=false,resourceCount=0,message='PagePoster · Підключаємося до WordPress',authenticated=false;
   page.on('close',()=>{closed=true;void browser.close().catch(()=>{});});browser.on('disconnected',()=>closed=true);
   const assertOpen=()=>{if(closed||page.isClosed()||!browser.isConnected())fail('BROWSER_CLOSED');};
   const same=value=>{if(!base)fail('BROWSER_SITE_REQUIRED');const url=validatePublicUrl(value);if(url.origin!==base.origin)fail('BROWSER_ORIGIN_BLOCKED');return url;};
@@ -49,7 +49,7 @@ export function createVisibleWordPress({chromium=runtime(),executablePath=execut
     try{if(action.options.beforeSend)action.options.beforeSend();action.sent=true;const reply=await transport(url.href,{...action.options,method:action.method,followRedirects:false});action.reply=reply;
      // Browser redirects can escape request interception. Follow them explicitly
      // through navigate after recording the original response for bootstrap.
-     if([301,302,303,307,308].includes(reply.status)){await acceptCookies(reply,url);await route.fulfill({status:200,contentType:'text/html; charset=utf-8',body:'<!doctype html><meta charset="utf-8"><title>WordPress</title><p>WordPress проверяет вход. Ожидаем следующий экран…</p>'});}
+     if([301,302,303,307,308].includes(reply.status)){await acceptCookies(reply,url);await route.fulfill({status:200,contentType:'text/html; charset=utf-8',body:'<!doctype html><meta charset="utf-8"><title>WordPress</title><p>WordPress перевіряє вхід. Очікуємо наступний екран…</p>'});}
      else await fulfill(route,reply,url);action.resolve(reply);
     }catch(error){action.reject(error);await route.abort().catch(()=>{});}return;
    }
@@ -68,11 +68,11 @@ export function createVisibleWordPress({chromium=runtime(),executablePath=execut
     let navigation;
     if(method==='GET')navigation=page.goto(url,{waitUntil:'domcontentloaded',timeout:20000});
     else if(new URL(url).pathname.endsWith('/wp-login.php')){
-     await status('PagePoster · Вводим данные и входим в WordPress');const form=page.locator('form#loginform');const data=new URLSearchParams(options.body);
+     await status('PagePoster · Уводимо дані й входимо у WordPress');const form=page.locator('form#loginform');const data=new URLSearchParams(options.body);
      await form.locator('[name=log]').fill(data.get('log')||'');await form.locator('[name=pwd]').fill(data.get('pwd')||'');
      const submit=form.locator('input[type=submit],button[type=submit]').first(),loaded=page.waitForEvent('domcontentloaded',{timeout:20000});navigation=Promise.all([loaded,submit.count().then(count=>count?submit.click():form.evaluate(f=>f.requestSubmit()))]);
     }else if(method==='POST'&&new URL(url).searchParams.get('action')==='upload-plugin'){
-     const file=uploadFile(options.body,options.headers?.['content-type']);await status('PagePoster · Устанавливаем '+file.name);
+     const file=uploadFile(options.body,options.headers?.['content-type']);await status('PagePoster · Установлюємо '+file.name);
      const input=page.locator('input[type=file][name=pluginzip]');await input.setInputFiles(file);const form=input.locator('xpath=ancestor::form'),submit=form.locator('input[type=submit],button[type=submit]').first(),loaded=page.waitForEvent('domcontentloaded',{timeout:20000});navigation=Promise.all([loaded,submit.count().then(count=>count?submit.click():form.evaluate(f=>f.requestSubmit()))]);
     }else if(method==='POST'&&options.nativeForm){
      const form=page.locator('form#post'),loaded=page.waitForEvent('domcontentloaded',{timeout:20000});navigation=Promise.all([loaded,form.locator('#publish').click()]);
@@ -89,31 +89,31 @@ export function createVisibleWordPress({chromium=runtime(),executablePath=execut
    login:async credential=>{assertOpen();if(authenticated)return;const url=new URL('wp-login.php',base).href;await navigate(url,{headers:await cookieHeaders(url)});await navigate(url,{method:'POST',headers:{...(await cookieHeaders(url)),'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({log:credential.username,pwd:credential.applicationPassword,redirect_to:new URL('wp-admin/',base).href,testcookie:'1'}).toString()});
     if(new URL(page.url()).searchParams.get('action')==='confirm_admin_email'){
      const links=await page.locator('a[href]').evaluateAll(nodes=>nodes.map(node=>node.href));const reminder=links.find(value=>{try{const target=same(value);return target.pathname===new URL(url).pathname&&target.searchParams.get('action')==='confirm_admin_email'&&/^[a-zA-Z0-9_-]{5,100}$/.test(target.searchParams.get('remind_me_later')||'')&&readRedirect(target);}catch{return false;}});
-     if(!reminder)fail('BROWSER_EMAIL_CONFIRMATION_REQUIRED');await status('PagePoster · WordPress просит проверить email. Выбираем «Напомнить позже», адрес не меняем.');await navigate(reminder,{headers:await cookieHeaders(reminder)});
+     if(!reminder)fail('BROWSER_EMAIL_CONFIRMATION_REQUIRED');await status('PagePoster · WordPress просить перевірити email. Вибираємо «Нагадати пізніше», адресу не змінюємо.');await navigate(reminder,{headers:await cookieHeaders(reminder)});
     }
     if(await page.locator('form#loginform,input[name*=otp],input[name*=two_factor]').count()||!(await context.cookies(base.href)).some(c=>c.name.startsWith('wordpress_logged_in_')))fail('BROWSER_LOGIN_REQUIRED');authenticated=true;},
-   publication:async()=>{await status('PagePoster · Проверяем готовый HTML. Далее откроется редактор WordPress.');const url=new URL('wp-admin/edit.php?post_type=page',base).href;await navigate(url,{headers:await cookieHeaders(url)});if(await page.locator('form#loginform').count()){authenticated=false;fail('BROWSER_LOGIN_REQUIRED');}},
+   publication:async()=>{await status('PagePoster · Перевіряємо готовий HTML. Далі відкриється редактор WordPress.');const url=new URL('wp-admin/edit.php?post_type=page',base).href;await navigate(url,{headers:await cookieHeaders(url)});if(await page.locator('form#loginform').count()){authenticated=false;fail('BROWSER_LOGIN_REQUIRED');}},
    publish:async({operation,address,beforeSend})=>{
     let nativeDispatched=false;try{
     assertOpen();if(operation.kind!=='create'||!['page','post'].includes(operation.postType)||operation.status!=='publish'||! /^[a-f0-9-]{36}$/.test(operation.operationId))fail('BROWSER_ACTION_UNSUPPORTED');
     const editor=new URL('wp-admin/post-new.php',base);editor.searchParams.set('post_type',operation.postType);editor.searchParams.set('pageposter_operation',operation.operationId);
-    await status('PagePoster · Открываем редактор WordPress');await navigate(editor.href,{headers:await cookieHeaders(editor.href)});
+    await status('PagePoster · Відкриваємо редактор WordPress');await navigate(editor.href,{headers:await cookieHeaders(editor.href)});
     const form=page.locator('form#post');if(await form.locator('[name=pageposter_operation]').inputValue()!==operation.operationId)fail('BROWSER_EDITOR_UNAVAILABLE');
-    await status('PagePoster · Заполняем заголовок и HTML страницы');await form.locator('#title').fill(operation.title);await form.locator('#content').fill(operation.content);
+    await status('PagePoster · Заповнюємо заголовок і HTML сторінки');await form.locator('#title').fill(operation.title);await form.locator('#content').fill(operation.content);
     const data=await form.evaluate(form=>{const data=new URLSearchParams();for(const [key,value]of new FormData(form))if(typeof value==='string')data.append(key,value);const button=form.querySelector('#publish');if(button.name)data.set(button.name,button.value);return {action:form.action,body:data.toString()};});
     const target=same(data.action);if(target.pathname!==new URL('wp-admin/post.php',base).pathname)fail('BROWSER_ORIGIN_BLOCKED');
     const fields=new URLSearchParams(data.body);if(fields.get('post_title')!==operation.title||fields.get('content')!==operation.content||fields.get('post_type')!==operation.postType||!fields.get('pageposter_nonce'))fail('BROWSER_EDITOR_UNAVAILABLE');
-    await status('PagePoster · Нажимаем «Опубликовать» в WordPress');
+    await status('PagePoster · Натискаємо «Опублікувати» у WordPress');
     await navigate(target.href,{method:'POST',headers:{...(await cookieHeaders(target.href)),'content-type':'application/x-www-form-urlencoded'},body:data.body,nativeForm:true,beforeSend:()=>{if(beforeSend)beforeSend();nativeDispatched=true;}});
     let result;try{result=JSON.parse(await page.locator('#pageposter-operation-result').textContent());}catch{throw Object.assign(Error('BROWSER_PUBLICATION_UNCERTAIN'),{code:'BROWSER_PUBLICATION_UNCERTAIN',uncertain:true});}
     if(!Number.isInteger(result.status)||!result.data)throw Object.assign(Error('BROWSER_PUBLICATION_UNCERTAIN'),{code:'BROWSER_PUBLICATION_UNCERTAIN',uncertain:true});
     return {status:result.status,text:JSON.stringify(result.data),url:address,headers:{'content-type':'application/json'}};
     }catch(error){if(!nativeDispatched)error.writeNotAttempted=true;if(!error.code)error.code=nativeDispatched?'BROWSER_PUBLICATION_UNCERTAIN':'BROWSER_EDITOR_UNAVAILABLE';throw error;}
    },
-   result:async url=>{await status('PagePoster · Страница опубликована. Проверяем результат.');await navigate(same(url).href,{headers:await cookieHeaders(url)});},
+   result:async url=>{await status('PagePoster · Сторінку опубліковано. Перевіряємо результат.');await navigate(same(url).href,{headers:await cookieHeaders(url)});},
    focus:async()=>{assertOpen();await page.bringToFront();},
    close:async()=>{closed=true;await browser.close().catch(()=>{});}
-  };sessions.set(id,session);if(!base)await page.setContent('<!doctype html><meta charset="utf-8"><title>PagePoster — приватная публикация</title><main style="font:18px/1.6 Arial;max-width:700px;margin:80px auto;padding:30px"><h1>Подготовка публикации</h1><p>Подбираем донора и открываем WordPress. В этом приватном окне будет виден весь процесс.</p></main>');await status(message);await page.bringToFront();return session;
+  };sessions.set(id,session);if(!base)await page.setContent('<!doctype html><meta charset="utf-8"><title>PagePoster — приватна публікація</title><main style="font:18px/1.6 Arial;max-width:700px;margin:80px auto;padding:30px"><h1>Підготовка публікації</h1><p>Підбираємо донора й відкриваємо WordPress. У цьому приватному вікні буде видно весь процес.</p></main>');await status(message);await page.bringToFront();return session;
  }
- return {open,prepare:(id,options)=>open(id,null,options),publish:async(id,input)=>{const session=sessions.get(id);if(!session)fail('BROWSER_NOT_OPEN');return session.publish(input);},assertOpen:id=>{const session=sessions.get(id);if(!session)fail('BROWSER_NOT_OPEN');session.assertOpen();},focus:async id=>{const session=sessions.get(id);if(!session)fail('BROWSER_NOT_OPEN');await session.focus();},done:async id=>sessions.get(id)?.status('PagePoster · Готово. Страница опубликована и проверена.'),error:async(id,code)=>sessions.get(id)?.status('PagePoster · Остановлено: '+(/^[A-Z_a-z]{1,80}$/.test(code||'')?code:'ошибка')+'. Подробности и продолжение — в PagePoster.'),result:async(id,url)=>sessions.get(id)?.result(url),reset:async id=>{await sessions.get(id)?.close();sessions.delete(id);},close:async()=>{await Promise.all([...sessions.values()].map(session=>session.close()));sessions.clear();}};
+ return {open,prepare:(id,options)=>open(id,null,options),publish:async(id,input)=>{const session=sessions.get(id);if(!session)fail('BROWSER_NOT_OPEN');return session.publish(input);},assertOpen:id=>{const session=sessions.get(id);if(!session)fail('BROWSER_NOT_OPEN');session.assertOpen();},focus:async id=>{const session=sessions.get(id);if(!session)fail('BROWSER_NOT_OPEN');await session.focus();},done:async id=>sessions.get(id)?.status('PagePoster · Готово. Сторінку опубліковано й перевірено.'),error:async(id,code)=>sessions.get(id)?.status('PagePoster · Зупинено: '+(/^[A-Z_a-z]{1,80}$/.test(code||'')?code:'помилка')+'. Подробиці й продовження — у PagePoster.'),result:async(id,url)=>sessions.get(id)?.result(url),reset:async id=>{await sessions.get(id)?.close();sessions.delete(id);},close:async()=>{await Promise.all([...sessions.values()].map(session=>session.close()));sessions.clear();}};
 }

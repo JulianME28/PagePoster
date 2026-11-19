@@ -5,6 +5,8 @@ const {fork}=require('node:child_process'),fs=require('node:fs'),path=require('n
 const {resolveDesktopPaths}=require('./runtime.cjs'),{isWorkspaceURL,isExternalURL,authorizeHeaders,windowPreferences}=require('./policy.cjs');
 const openChromeTab=require('./google-tab.cjs').createChromeTabOpener();
 app.setName('PagePoster');app.setAppUserModelId('PagePoster.Desktop');
+// Chromium's built-in file controls and validation messages follow this locale.
+app.commandLine.appendSwitch('lang','uk');
 const testRoot=process.env.PAGEPOSTER_DESKTOP_TEST_ROOT;
 if(testRoot&&path.isAbsolute(testRoot))app.setPath('userData',path.join(testRoot,'profile'));
 let window=null,backend=null,origin=null,quitting=false,exiting=false,ready=false,paths=null,startupNavigation=null,rarRead=null;

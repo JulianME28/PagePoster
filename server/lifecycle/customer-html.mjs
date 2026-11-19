@@ -58,14 +58,14 @@ export function prepareCustomerHtml(input){
  // DOMParser is inert: there are no source script evaluations or resource fetches.
  const document=new rendererWindow.DOMParser().parseFromString(html,'text/html');
  const warnings=[...new Set([...(analysis.warnings||[]),...sourceWarnings(document)])];
- const title=(analysis.title||analysis.headings?.find(heading=>heading.text)?.text||'Страница клиента').slice(0,500);
+ const title=(analysis.title||analysis.headings?.find(heading=>heading.text)?.text||'Сторінка клієнта').slice(0,500);
  if(!analysis.title)warnings.push('Заголовок сторінки визначено автоматично; перевірте його перед публікацією.');
  const siteName=document.querySelector('meta[property="og:site_name"]')?.getAttribute('content')||'';
  const brand=input.brand?.trim()||siteName.trim().replace(/\s+/g,' ').slice(0,200)||title.slice(0,200);
  const language=rendererWindow.PagePoster.languageTag(analysis.lang||'uk');
  const config=rendererWindow.PagePoster.normalizeConfig({...draft,title,brand,language,
   brandUrl:brandUrl||analysis.firstLink||'',footerBrandUrl:brandUrl||analysis.firstLink||'',
-  footerTitle:title.slice(0,300),footerLinksTitle:({pl:'Rozdziały',uk:'Розділи',ru:'Разделы'})[language.split('-')[0]]||'Sections'});
+  footerTitle:title.slice(0,300),footerLinksTitle:({pl:'Rozdziały',uk:'Розділи',ru:'Розділи'})[language.split('-')[0]]||'Sections'});
  // Normalization has only a character limit; the byte check above ensures no truncation.
  if(config.importHtml!==html)fail();
  return{config:JSON.parse(JSON.stringify(config)),title,brand,language,chromeMode,sourceBytes,

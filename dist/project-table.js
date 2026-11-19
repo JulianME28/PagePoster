@@ -38,7 +38,7 @@
       if (character === '"') {
         // Pasted TSV can contain literal JSON and HTML in unquoted cells.
         if (delimiter === '\t' && cell && !closed) { cell += character; continue; }
-        if (cell || closed) throw Error('Неверные кавычки в таблице.');
+        if (cell || closed) throw Error('Некоректні лапки в таблиці.');
         quoted = true;
         continue;
       }
@@ -49,10 +49,10 @@
         if (headerOnly) return rows;
         continue;
       }
-      if (closed) throw Error('После закрывающей кавычки должен быть разделитель или конец строки.');
+      if (closed) throw Error('Після закривальних лапок має бути роздільник або кінець рядка.');
       cell += character;
     }
-    if (quoted) throw Error('В таблице не закрыты кавычки.');
+    if (quoted) throw Error('У таблиці не закрито лапки.');
     if (cell || cells.length || closed) finishRow();
     return rows;
   }

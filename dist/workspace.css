@@ -55,3 +55,103 @@ body[data-workspace-view=compose] #ap-overview,body[data-workspace-view=compose]
 .ap-proxy-table th{position:sticky;top:0;background:#f5f8fd;color:#526680}
 .ap-proxy-table th:first-child{min-width:130px}
 .ap-proxy-table th:nth-child(2){min-width:125px}
+
+/* Shared desktop surfaces and readable project lists. */
+:root {
+  --ink: #1c293a;
+  --muted: #526279;
+  --line: #dbe2eb;
+  --primary: #2457c5;
+  --teal: #2457c5;
+  --soft: #f3f5f9;
+  background: #f3f5f9;
+}
+body { background: #f3f5f9; }
+.ap-sidebar { background: #fff; border-right-color: var(--line); }
+.ap-brand { letter-spacing: -.6px; }
+.ap-nav, .ap-project-button { min-height: 43px; }
+.ap-nav[aria-current="page"], .ap-project-button[aria-current="page"] {
+  background: #eaf0fc;
+  color: #1e4da8;
+  border-color: #dce6fa;
+}
+.ap-topbar { min-height: 52px; background: #fff; }
+.ap-location { font-size: 13px; color: var(--muted); }
+.ap-button { border-radius: 9px; }
+.ap-primary { box-shadow: 0 1px 2px #173e7720; }
+.ap-secondary { color: #354a65; border-color: #cdd7e5; }
+.ap-primary:disabled { opacity: 1; color: #65758b; background: #e6ebf3; border-color: #dbe2ed; box-shadow: none; }
+.ap-secondary:disabled { opacity: 1; color: #79869a; background: #f5f7fa; border-color: #e0e6ee; }
+.ap-field { color: #354961; }
+.ap-field input, .ap-field textarea, .ap-field select { border-color: #cdd7e5; border-radius: 8px; }
+button:focus-visible, a:focus-visible, summary:focus-visible {
+  outline: 3px solid #779de6;
+  outline-offset: 3px;
+}
+.ap-dialog { box-shadow: 0 24px 80px #152c4a26; border-color: #d4deeb; }
+.ap-dialog::backdrop { background: #1b2a4259; }
+.ap-notice { font-size: 13px; line-height: 1.65; border-radius: 9px; }
+.ap-fine { color: #596a80; }
+.ap-settings-tabs { flex-wrap: wrap; gap: 8px; padding-bottom: 14px; }
+.ap-settings-tabs .ap-button { min-height: 38px; font-size: 13px; }
+.ap-settings-tabs [aria-pressed=true] { color: #1d4da7; background: #eaf0fc; border-color: #c0d1ee; }
+.pq-workspace .ap-dialog-heading { margin-bottom: 20px; align-items: center; }
+.pq-workspace .ap-dialog-heading h2 { font-size: 27px; letter-spacing: -.7px; }
+.pq-workspace .pq-lanes { padding: 15px 18px; margin-bottom: 16px; gap: 24px; border-color: var(--line); border-radius: 12px; }
+.pq-workspace .pq-lanes h3 { font-size: 13px; color: #354961; }
+.pq-workspace .pq-lanes p { font-size: 13px; color: #526279; font-variant-numeric: tabular-nums; }
+.pq-filters { margin-top: 18px; gap: 12px; }
+.pq-filters .ap-field { font-size: 12px; }
+.pq-filters input, .pq-filters select { font-size: 13px; min-height: 42px; }
+.pq-workspace-actions { margin-bottom: 8px; }
+.pq-workspace .pq-project { border-color: #d7e0eb; border-radius: 13px; box-shadow: 0 2px 5px #1a355308; }
+.pq-project-heading { padding: 20px; gap: 16px; }
+.pq-project-heading h3 { font-size: 17px; line-height: 1.45; }
+.pq-project-heading p { font-size: 12px; color: #526279; }
+.pq-project-heading .pq-actions .ap-button { min-height: 40px; font-size: 12px; }
+.pq-workspace .pq-project-plan { padding-left: 20px; padding-right: 20px; font-size: 12px; color: #526279; line-height: 1.65; }
+.pq-table { min-width: 1000px; font-size: 13px; line-height: 22px; }
+.pq-table th { font-size: 12px; color: #465a72; font-weight: 600; background: #f4f6fa; }
+.pq-table td, .pq-table th { padding: 15px 14px; }
+.pq-table tbody tr:hover { background: #f8faff; }
+.pq-table tr[aria-selected=true], .pq-table tr[aria-selected=true]:hover { background: #edf3ff; }
+.pq-table .pq-row-open { font-weight: 600; line-height: 22px; color: #243a56; }
+.pq-table .pq-row-key { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 18px; color: #63758a; }
+.pq-table .pq-site-domain { font-weight: 600; color: #2254b6; text-underline-offset: 3px; }
+.pq-table .pq-site-metrics { font-size: 12px; line-height: 20px; color: #596b81; }
+.pq-table .pq-error { font-size: 12px; color: #a33832; }
+.pq-table .ap-button { font-size: 12px; min-height: 34px; padding: 7px 11px; }
+.pq-table .pq-row-actions { min-width: 160px; }
+.pq-table .pq-row-actions .ap-button { overflow-wrap: normal; word-break: normal; }
+.pq-table td:nth-last-child(2) { min-width: 145px; }
+.pq-table .pq-state { padding: 5px 9px; font-size: 12px; line-height: 1.5; border: 1px solid transparent; border-radius: 7px; }
+.pq-state.ready, .pq-state.queued { color: #345270; background: #edf2f8; border-color: #dce5f0; }
+.pq-table .pq-state.awaiting_review, .pq-state.completed { color: #226143; background: #eaf5ee; border-color: #cee7d7; }
+.pq-state.attention, .pq-state.failed, .pq-state.uncertain { color: #924512; background: #fff3e2; border-color: #f1d9b4; }
+.pq-workspace[data-density=compact] .pq-table td { padding: 9px 14px; }
+.ap-project-list, .ap-dialog { scrollbar-width: auto; scrollbar-color: #a6b4c6 #f3f5f9; }
+.pq-project .pq-table-wrap { scrollbar-width: auto; scrollbar-color: auto; }
+.pq-project .pq-table-wrap::-webkit-scrollbar { width: 12px; height: 12px; }
+.pq-project .pq-table-wrap::-webkit-scrollbar-track { background: #f3f5f9; }
+.pq-project .pq-table-wrap::-webkit-scrollbar-thumb { min-height: 24px; background: #a6b4c6; border-radius: 8px; }
+.pq-project .pq-table-wrap::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+.pq-more > div { border-color: #d5deeb; box-shadow: 0 12px 32px #1b355321; }
+.pq-more summary { color: #3e536e; }
+.pq-dialog input[type=file] { padding: 20px; border-color: #9db4d6; background: #f5f8fe; }
+.pq-dialog input[type=file]::file-selector-button { padding: 9px 13px; margin-right: 12px; font: inherit; border: 1px solid #c5d2e4; border-radius: 7px; color: #284566; background: #fff; cursor: pointer; }
+.pq-defaults { border-color: #dbe3ee; background: #f5f8fc; }
+.pq-empty { padding: 42px 24px; font-size: 14px; color: #526279; }
+#pq-review.pq-inspector { border-color: #ccd8e8; box-shadow: 0 18px 70px #1835512b; }
+#pq-review.pq-inspector .pq-review-canvas { background: #e8edf4; border-color: #d2dce9; }
+#pq-review-context { color: #526279; font-size: 13px; }
+@media (min-width: 1000px) {
+  body[data-workspace-view=queue] .ap-shell { grid-template-columns: 216px minmax(0, 1fr); }
+  body[data-workspace-view=queue] #ap-main { padding: 26px 30px 36px; }
+}
+@media (max-width: 1000px) {
+  .pq-project-heading .pq-actions { width: 100%; }
+  .pq-workspace .pq-lanes { gap: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ap-button, .ap-nav, .ap-project-button { transition: none; }
+}

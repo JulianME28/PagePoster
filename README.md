@@ -1,10 +1,31 @@
 # PagePoster Desktop
 
-PagePoster is a Windows application for preparing and reviewing pages and publishing them to WordPress sites you are authorized to manage.
+PagePoster — програма для Windows, яка готує сторінки з матеріалів проєкту й публікує їх на сайтах WordPress, якими ви маєте право керувати. Інтерфейс українською мовою.
 
-- Download the clean Windows ZIP from [Releases](https://github.com/JulianME28/PagePoster/releases). Extract the entire folder and open PagePoster.exe.
-- [User guide (Ukrainian)](docs/USER-GUIDE.uk.md)
+## Початок роботи
 
-The public package starts without projects, saved connections, Google Sheets, WordPress credentials, API keys, or a bundled Google OAuth client. Configure your own connections in Settings. To use Google browser sign-in, build with your own Desktop OAuth client configuration. Alternatively, use the service-account option for your own Google Sheets.
+Завантажте Windows-випуск у розділі [Releases](https://github.com/JulianME28/PagePoster/releases), розпакуйте всю папку й запустіть **PagePoster.exe**. Для готового випуску Node.js і термінал не потрібні. Поточний код та гайд оновлено 19 листопада 2026 року; дата кожного Windows-архіву вказана в його випуску.
 
-To develop on Windows, use Node.js 24 and run pnpm install --frozen-lockfile. To stage a build with browser sign-in, run node scripts/configure-google-client.cjs with the path to your Desktop OAuth configuration, then node scripts/build-desktop.cjs. Keep the local OAuth file outside version control.
+- [Ілюстрований гайд українською](docs/USER-GUIDE.uk.md) — від першого налаштування до публікації та ручної перевірки.
+- [Гайд у PDF](docs/PagePoster-User-Guide-1.0-UA.pdf) — 24 сторінки та 22 скріншоти українського інтерфейсу.
+- [Навчальні приклади одним ZIP](docs/PagePoster-Guide-Examples.zip) або [окремі файли](docs/user-guide-examples).
+
+## Як працювати
+
+1. У налаштуваннях додайте свій OpenAI API-ключ і підключіть базу сайтів у Google Таблицях.
+2. Завантажте проєкт через «Імпорт проєкту»: таблицю, документ, архів або готові HTML-сторінки.
+3. Перегляньте підготовлені матеріали, вимоги та підібрані сайти. Перевірте вигляд на комп’ютері й телефоні у попередньому перегляді.
+4. Запустіть публікацію проєкту. PagePoster обробляє сторінки послідовно через редактор WordPress і зберігає адреси створених сторінок.
+5. Після публікації натисніть «Перевірити сторінку», відкрийте живу сторінку та схваліть її або відхиліть із перенесенням у кошик WordPress. За потреби відкрийте редактор кнопкою «Відкрити в WordPress».
+
+Навчальні приклади містять лише демонстраційні адреси example. Перед справжньою публікацією використайте свої матеріали та дозволені сайти.
+
+## Чистий випуск і власні підключення
+
+Публічний пакет не містить робочих проєктів, бази сайтів, паролів, API-ключів або OAuth-конфігурації команди. Підключення налаштовуються на вашому пристрої. Для входу в Google через браузер збірка має містити вашу конфігурацію Desktop OAuth; також підтримується сервісний акаунт для ваших Google Таблиць.
+
+## Розробка у Windows
+
+Потрібні Node.js 24 і pnpm. Встановіть залежності командою `pnpm install --frozen-lockfile`. Для збірки з входом через Google налаштуйте власний Desktop OAuth-клієнт командою `node scripts/configure-google-client.cjs <шлях-до-конфігурації>`, потім виконайте `node scripts/build-desktop.cjs`.
+
+Локальні конфігурації, ключі, робоча база та результати збірок виключені з Git. Для складання й оновлення програми зберігайте їх поза публічним репозиторієм.

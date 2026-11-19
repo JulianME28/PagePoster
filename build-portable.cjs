@@ -8,7 +8,7 @@ let html=read('index.html');
 html=html.replace('<link rel="stylesheet" href="autopilot.css">',()=>'<style>'+read('autopilot.css')+'</style>');
 html=html.replace('<link rel="stylesheet" href="project-queue.css">',()=>'<style>'+read('project-queue.css')+'</style>');
 html=html.replace('<link rel="stylesheet" href="google-account.css">',()=>'<style>'+read('google-account.css')+'</style>');
-for(const name of ['csstree.js','html-package.js','project-normalizer.js','autopilot-ui.js','autopilot-recovery.js','project-queue-ui.js','google-account-ui.js']) html=html.replace('<script defer src="'+name+'"></script>',()=>'<script defer>'+read(name).replace(/<\/script/gi,'<\\/script')+'</script>');
+html=html.replace(/<script defer src="([a-z0-9-]+\.js)"><\/script>/g,(_tag,name)=>'<script defer>'+read(name).replace(/<\/script/gi,'<\\/script')+'</script>');
 html=html.replace('<link rel="stylesheet" href="styles.css">',()=>'<style>'+read('styles.css')+'</style>');
 html=html.replace('<link rel="stylesheet" href="lifecycle.css">',()=>'<style>'+read('lifecycle.css')+'</style>');
 for(const name of ['purify.min.js','csstree.js','html-import.js','page-runtime.js','generator.js','link-placements.js','design-variants.js','ai-core.js','ai-ui.js','plugin-download.js','run-ui.js','campaign-ui.js','lifecycle-ui.js','app.js']) html=html.replace('<script src="'+name+'"></script>',()=>'<script>'+read(name).replace(/<\/script/gi,'<\\/script')+'</script>');

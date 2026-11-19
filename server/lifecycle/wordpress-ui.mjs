@@ -277,7 +277,7 @@ export function createWordPressUI({chromium,executablePath,headless=false,transp
      await route.fulfill({status:200,contentType:'text/html; charset=utf-8',body:'<!doctype html><meta charset="utf-8"><meta data-pp-redirect http-equiv="refresh" content="0;url='+escape(next.href)+'">'});
     }else{const clean={};for(const [key,value]of Object.entries(reply.headers||{}))if(!['set-cookie','content-length','content-encoding','transfer-encoding','connection'].includes(key.toLowerCase()))clean[key]=Array.isArray(value)?value.join(', '):String(value);await route.fulfill({status:reply.status,headers:clean,body:reply.body||Buffer.from(reply.text||'')});}
     if(isPublish||isTrash)dispatch.finished=true;
-   }catch(error){if(!currentAccount(epoch))return route.abort().catch(()=>{});if(createCheckpoint&&pendingCreation&&!pendingDraftId&&error.requestNotStarted===true){try{await createCheckpoint({postId:null,phase:'not_started',requestNotStarted:true});pendingCreation=false;authenticated=false;}catch(rollbackError){error=rollbackError;}}if(req.isNavigationRequest()&&req.frame()===page.mainFrame())navigationError=error;if(isPublish||isTrash){dispatchError=error;await route.fulfill({status:502,contentType:'text/html; charset=utf-8',body:'<!doctype html><meta charset="utf-8"><h1>Ответ WordPress не подтверждён</h1><p>Готовый HTML сохранён. Продолжите запуск в PagePoster: сначала будет проверена уже созданная страница.</p>'}).catch(()=>{});}else await route.abort().catch(()=>{});}
+   }catch(error){if(!currentAccount(epoch))return route.abort().catch(()=>{});if(createCheckpoint&&pendingCreation&&!pendingDraftId&&error.requestNotStarted===true){try{await createCheckpoint({postId:null,phase:'not_started',requestNotStarted:true});pendingCreation=false;authenticated=false;}catch(rollbackError){error=rollbackError;}}if(req.isNavigationRequest()&&req.frame()===page.mainFrame())navigationError=error;if(isPublish||isTrash){dispatchError=error;await route.fulfill({status:502,contentType:'text/html; charset=utf-8',body:'<!doctype html><meta charset="utf-8"><h1>Відповідь WordPress не підтверджено</h1><p>Готовий HTML збережено. Продовжіть запуск у PagePoster: спочатку буде перевірено вже створену сторінку.</p>'}).catch(()=>{});}else await route.abort().catch(()=>{});}
   };
   await context.route('**/*',handleRoute);
   staticRouting=await attachBrowserStaticRouting({context,page,handle:handleRoute,epoch:()=>accountEpoch,isCurrent:currentAccount});
@@ -474,7 +474,7 @@ export function createWordPressUI({chromium,executablePath,headless=false,transp
      // otherwise click's actionability wait gives that script time to erase it.
      const submit=page.locator('#loginform input[type=submit],#loginform button[type=submit]').first();
      await submit.click({trial:true});await guard();
-     await status('PagePoster · Входим в WordPress');await page.locator('#loginform [name=log]').fill(username);await page.locator('#loginform [name=pwd]').fill(applicationPassword);mode='login';
+     await status('PagePoster · Входимо у WordPress');await page.locator('#loginform [name=log]').fill(username);await page.locator('#loginform [name=pwd]').fill(applicationPassword);mode='login';
       await page.locator('#loginform').evaluate((form,target)=>{let field=form.querySelector('[name=redirect_to]');if(!field){field=document.createElement('input');field.type='hidden';field.name='redirect_to';form.append(field);}field.value=target;},address(manualEditor?'wp-admin/':'wp-admin/plugins.php'));
      // An old #login_error can remain until the next POST response commits.
      // Wait for that new document, even when the login URL stays identical.
@@ -498,7 +498,7 @@ export function createWordPressUI({chromium,executablePath,headless=false,transp
      if(screen==='unknown')fail('BROWSER_LOGIN_UNCONFIRMED');
      if(screen==='form')mode='login';
      if(screen!=='wordpress'||!await hasLoginCookie())fail('BROWSER_LOGIN_REQUIRED');
-     mode='read';authenticated=true;await status('PagePoster · Вход выполнен');
+     mode='read';authenticated=true;await status('PagePoster · Вхід виконано');
    },
     async openEditor(postId,assertCurrent){
      if(!manualEditor||!authenticated||!Number.isSafeInteger(postId)||postId<1)fail('BROWSER_EDITOR_ACCESS');
@@ -532,7 +532,7 @@ export function createWordPressUI({chromium,executablePath,headless=false,transp
     const listing=address('wp-admin/plugins.php?plugin_status=all&s=PagePoster%20Clean%20Links');
     let row=page.locator('tr[data-plugin="'+cleaner+'"]');
     const current=new URL(page.url()),alreadyListed=current.origin===base.origin&&current.pathname===new URL('wp-admin/plugins.php',base).pathname&&!current.searchParams.has('action')&&!current.searchParams.has('action2')&&await row.count()===1;
-    mode='read';if(alreadyListed)await waitForState(adminDocumentReady,{argument:'plugins'});else await pluginScreen(listing);await status('PagePoster · Проверяем права установки Clean Links');
+    mode='read';if(alreadyListed)await waitForState(adminDocumentReady,{argument:'plugins'});else await pluginScreen(listing);await status('PagePoster · Перевіряємо права встановлення Clean Links');
     const readVersion=async()=>{const info=row.locator('.plugin-version-author-uri');return (await info.count()?await info.first().innerText():'').match(/\b(\d+(?:\.\d+){2,}(?:[-+][\w.-]+)?)\b/)?.[1];};
     const present=!!await row.count(),version=present?await readVersion():null;
     const older=version&&/^\d+\.\d+\.\d+$/.test(version)&&version.split('.').reduce((result,part,i)=>result||Math.sign(Number(part)-Number(requiredVersion.split('.')[i])),0)<0;
@@ -546,21 +546,21 @@ export function createWordPressUI({chromium,executablePath,headless=false,transp
      const bytes=readFileSync(fileURLToPath(new URL('../../assets/'+packageName,import.meta.url)));if(createHash('sha256').update(bytes).digest('hex')!==packageHash)fail('CLEAN_LINKS_PACKAGE_INVALID');
      const form=input.locator('xpath=ancestor::form'),action=same(await form.getAttribute('action')?new URL(await form.getAttribute('action'),page.url()).href:page.url());
      if(action.pathname!==new URL('wp-admin/update.php',base).pathname||action.searchParams.get('action')!=='upload-plugin')fail('BROWSER_ORIGIN_BLOCKED');
-     await input.setInputFiles({name:packageName,mimeType:'application/zip',buffer:bytes});await status('PagePoster · Устанавливаем только PagePoster Clean Links');mode='upload';armedUrl=action.href;
+     await input.setInputFiles({name:packageName,mimeType:'application/zip',buffer:bytes});await status('PagePoster · Установлюємо лише PagePoster Clean Links');mode='upload';armedUrl=action.href;
      // Admin notices may contain slow images/iframes. The upload result DOM is
      // sufficient; waiting for the window's load event can stop a valid install.
      await Promise.all([page.waitForURL(u=>u.pathname===action.pathname,{waitUntil:'commit'}),form.locator('input[type=submit],button[type=submit]').first().click({noWaitAfter:true})]);await guard();mode='read';
-     if(older){await waitForState(()=>!!document.querySelector('a.update-from-upload-overwrite[href],.wp-die-message,#loginform')||document.readyState!=='loading');await guard();const replace=page.locator('a.update-from-upload-overwrite[href]');if(!await replace.count())fail('CLEAN_LINKS_UPDATE_REQUIRED');const target=same(await replace.first().getAttribute('href')?new URL(await replace.first().getAttribute('href'),page.url()).href:'');if(target.pathname!==action.pathname||target.searchParams.get('action')!=='upload-plugin'||target.searchParams.get('overwrite')!=='update-plugin'||!target.searchParams.get('_wpnonce'))fail('CLEAN_LINKS_UPDATE_REQUIRED');await status('PagePoster · Обновляем только Clean Links до '+requiredVersion);await visit(target.href,false,'commit');await guard();}
+     if(older){await waitForState(()=>!!document.querySelector('a.update-from-upload-overwrite[href],.wp-die-message,#loginform')||document.readyState!=='loading');await guard();const replace=page.locator('a.update-from-upload-overwrite[href]');if(!await replace.count())fail('CLEAN_LINKS_UPDATE_REQUIRED');const target=same(await replace.first().getAttribute('href')?new URL(await replace.first().getAttribute('href'),page.url()).href:'');if(target.pathname!==action.pathname||target.searchParams.get('action')!=='upload-plugin'||target.searchParams.get('overwrite')!=='update-plugin'||!target.searchParams.get('_wpnonce'))fail('CLEAN_LINKS_UPDATE_REQUIRED');await status('PagePoster · Оновлюємо лише Clean Links до '+requiredVersion);await visit(target.href,false,'commit');await guard();}
      await pluginScreen(listing);row=page.locator('tr[data-plugin="'+cleaner+'"]');if(!await row.count())fail('CLEAN_LINKS_NOT_INSTALLED');
      if(!compatible(await readVersion()))fail('CLEAN_LINKS_UPDATE_REQUIRED');
     }
     if(!/(^|\s)active(\s|$)/.test(await row.getAttribute('class')||'')){
      const links=await row.locator('a[href]').evaluateAll(nodes=>nodes.map(n=>n.href));const activate=links.find(value=>{const u=same(value);return u.pathname===new URL('wp-admin/plugins.php',base).pathname&&u.searchParams.get('action')==='activate'&&u.searchParams.get('plugin')===cleaner&&!!u.searchParams.get('_wpnonce');});if(!activate)fail('CLEAN_LINKS_NOT_ACTIVE');
-     await status('PagePoster · Активируем Clean Links');await visit(activate);await pluginScreen(listing);row=page.locator('tr[data-plugin="'+cleaner+'"]');
+     await status('PagePoster · Активуємо Clean Links');await visit(activate);await pluginScreen(listing);row=page.locator('tr[data-plugin="'+cleaner+'"]');
      if(!await row.count())fail('CLEAN_LINKS_NOT_INSTALLED');if(!compatible(await readVersion()))fail('CLEAN_LINKS_UPDATE_REQUIRED');
      if(!/(^|\s)active(\s|$)/.test(await row.getAttribute('class')||''))fail('CLEAN_LINKS_NOT_ACTIVE');
     }
-    await status('PagePoster · Плагин очистки готов');return {name:'PagePoster Clean Links',active:true,...(await readVersion()===ampVersion?{ampSupport:true}:{})};
+    await status('PagePoster · Плагін очищення готовий');return {name:'PagePoster Clean Links',active:true,...(await readVersion()===ampVersion?{ampSupport:true}:{})};
    },
     inspectPublished:inspect,
     updatePublished,reconcileUpdate,
@@ -604,10 +604,10 @@ export function createWordPressUI({chromium,executablePath,headless=false,transp
      if(saved?.postId&&pendingDraftId&&saved.postId!==pendingDraftId)fail('NATIVE_RESULT_UNCERTAIN',true);
      if(!saved?.postId&&pendingDraftId){saved={postId:pendingDraftId,phase:'draft'};await checkpoint(saved);draftSaved=true;}
      if(saved?.postId){try{return await inspect({saved,title,html,slug});}catch(error){if(error.code!=='NATIVE_NOT_PUBLISHED'||['dispatching','published'].includes(saved.phase))throw error;}}
-     else{mode='read';draftCheckpoint=async saved=>{await checkpoint(saved);if(saved.postId){expected={postId:saved.postId,title,html};draftSaved=true;}};await status('PagePoster · Открываем новую страницу WordPress');await observeNativePhase(operationObserve,'create',()=>openNewPage(),{checkpoint:()=>pendingDraftId?'draft':pendingCreation?'creating':null});}
+     else{mode='read';draftCheckpoint=async saved=>{await checkpoint(saved);if(saved.postId){expected={postId:saved.postId,title,html};draftSaved=true;}};await status('PagePoster · Відкриваємо нову сторінку WordPress');await observeNativePhase(operationObserve,'create',()=>openNewPage(),{checkpoint:()=>pendingDraftId?'draft':pendingCreation?'creating':null});}
      const initial=await observeNativePhase(operationObserve,'editor',async()=>{
      const initial=await editorState();if(!Number.isSafeInteger(initial.postId)||initial.postId<1||!['draft','auto-draft'].includes(initial.status))fail('NATIVE_EDITOR_UNAVAILABLE');
-     if(pendingDraftId&&initial.postId!==pendingDraftId)fail('NATIVE_RESULT_UNCERTAIN',true);pendingDraftId=initial.postId;expected={postId:initial.postId,title,html,slug};if(!draftSaved)await checkpoint({postId:initial.postId,phase:'draft'});pendingCreation=false;draftCheckpoint=null;await status('PagePoster · Вводим название и готовый HTML');
+     if(pendingDraftId&&initial.postId!==pendingDraftId)fail('NATIVE_RESULT_UNCERTAIN',true);pendingDraftId=initial.postId;expected={postId:initial.postId,title,html,slug};if(!draftSaved)await checkpoint({postId:initial.postId,phase:'draft'});pendingCreation=false;draftCheckpoint=null;await status('PagePoster · Уводимо назву й готовий HTML');
      if(initial.kind==='classic'){
       const tab=page.locator('#content-html');if(await tab.count())await tab.click();await page.locator('#title').fill(title);await page.locator('#content').fill(html);
      }else{
@@ -638,7 +638,7 @@ export function createWordPressUI({chromium,executablePath,headless=false,transp
      // state. Publish only the same title/content that the request guard expects.
      await waitForState(({title,html})=>{const plain=value=>String(value||'').replace(/\r\n/g,'\n');const form=document.querySelector('form#post');if(form)return plain(form.querySelector('#title')?.value)===plain(title)&&plain(form.querySelector('#content')?.value)===plain(html);const editor=window.wp?.data?.select('core/editor');if(!editor)return false;const content=plain(editor.getEditedPostContent?.());return plain(editor.getEditedPostAttribute?.('title'))===plain(title)&&(content===plain(html)||content==='<!-- wp:html -->\n'+plain(html)+'\n<!-- /wp:html -->');},{argument:{title,html},code:'NATIVE_EDITOR_CONTENT_PENDING'});
      return initial;},{checkpoint:()=>pendingDraftId?'draft':null});
-     await status('PagePoster · Нажимаем «Опубликовать»');dispatch={sent:false,finished:false,checkpoint,beforeSend};mode='publish';
+     await status('PagePoster · Натискаємо «Опублікувати»');dispatch={sent:false,finished:false,checkpoint,beforeSend};mode='publish';
      if(initial.kind==='classic')await page.locator('#publish').click();
      else{
       const toggle=page.locator('button.editor-post-publish-panel__toggle').filter({visible:true}).first();
@@ -659,7 +659,7 @@ export function createWordPressUI({chromium,executablePath,headless=false,transp
     }
     finally{mode='read';armedUrl=null;draftCheckpoint=null;}
    },
-   async result(url){mode='read';await visit(same(url).href);await status('PagePoster · Страница опубликована');},
+   async result(url){mode='read';await visit(same(url).href);await status('PagePoster · Сторінку опубліковано');},
    async focus(){assertOpen();await page.bringToFront();},
    async resume(){assertOpen();await guard();return true;},
    close:cleanup
@@ -696,5 +696,5 @@ export function createWordPressUI({chromium,executablePath,headless=false,transp
    throw error;
   }
  }
- return {nativeEditor:true,transportFor:id=>{const session=sessions.get(id);if(!session)return null;try{session.assertOpen();return session.networkTransport;}catch{return null;}},open,prepare:(id,options)=>open(id,options?.baseUrl||null,options),assertOpen:id=>{const s=sessions.get(id);if(!s)fail('BROWSER_NOT_OPEN');s.assertOpen();},focus:async id=>{const s=sessions.get(id);if(!s)fail('BROWSER_NOT_OPEN');await s.focus();},resume:async id=>{const s=sessions.get(id);if(!s)return false;try{s.assertOpen();}catch(error){if(error.code==='BROWSER_CLOSED')return false;throw error;}return s.resume();},switchAccount:async id=>{const s=sessions.get(id);if(!s)fail('BROWSER_NOT_OPEN');return s.switchAccount();},reset:id=>serialize(async()=>{await sessions.get(id)?.close();sessions.delete(id);if(owner===id&&!openings.has(id))owner=null;}),result:async(id,url)=>sessions.get(id)?.result(url),done:async id=>{const s=sessions.get(id);if(!s)return;s.finished=true;try{await s.status('PagePoster · Готово. Страница опубликована.');}catch(error){if(error.code!=='BROWSER_CLOSED')throw error;}},error:async(id,code)=>sessions.get(id)?.status(manualInstructions[code]||'PagePoster · Остановлено: '+(/^[a-zA-Z_]{1,80}$/.test(code||'')?code:'ошибка')+'. Подробности — в PagePoster.'),close:async()=>{closing=true;await sharedBrowser?.close().catch(()=>{});await Promise.allSettled([...openings.values()]);await lifecycle;await Promise.all([...sessions.values()].map(s=>s.close()));sessions.clear();sharedBrowser=null;owner=null;}};
+ return {nativeEditor:true,transportFor:id=>{const session=sessions.get(id);if(!session)return null;try{session.assertOpen();return session.networkTransport;}catch{return null;}},open,prepare:(id,options)=>open(id,options?.baseUrl||null,options),assertOpen:id=>{const s=sessions.get(id);if(!s)fail('BROWSER_NOT_OPEN');s.assertOpen();},focus:async id=>{const s=sessions.get(id);if(!s)fail('BROWSER_NOT_OPEN');await s.focus();},resume:async id=>{const s=sessions.get(id);if(!s)return false;try{s.assertOpen();}catch(error){if(error.code==='BROWSER_CLOSED')return false;throw error;}return s.resume();},switchAccount:async id=>{const s=sessions.get(id);if(!s)fail('BROWSER_NOT_OPEN');return s.switchAccount();},reset:id=>serialize(async()=>{await sessions.get(id)?.close();sessions.delete(id);if(owner===id&&!openings.has(id))owner=null;}),result:async(id,url)=>sessions.get(id)?.result(url),done:async id=>{const s=sessions.get(id);if(!s)return;s.finished=true;try{await s.status('PagePoster · Готово. Сторінку опубліковано.');}catch(error){if(error.code!=='BROWSER_CLOSED')throw error;}},error:async(id,code)=>sessions.get(id)?.status(manualInstructions[code]||'PagePoster · Зупинено: '+(/^[a-zA-Z_]{1,80}$/.test(code||'')?code:'помилка')+'. Подробиці — у PagePoster.'),close:async()=>{closing=true;await sharedBrowser?.close().catch(()=>{});await Promise.allSettled([...openings.values()]);await lifecycle;await Promise.all([...sessions.values()].map(s=>s.close()));sessions.clear();sharedBrowser=null;owner=null;}};
 }

@@ -11,11 +11,11 @@ export function safeAIDiagnostics(value){
 }
 export function aiDiagnosticMessage(value){
  const d=safeAIDiagnostics(value);if(!d)return null;
- if(d.providerCode==='model_not_found')return 'OpenAI: проект не имеет доступа к модели '+(d.model||'из настроек')+' или модель недоступна (HTTP '+d.httpStatus+', model_not_found). Выберите доступную модель или проверьте разрешения проекта.';
- if(d.providerCode==='unsupported_country_region_territory')return 'OpenAI отклонил запрос из неподдерживаемого региона (HTTP '+d.httpStatus+', unsupported_country_region_territory). Проверьте регион сервера и настройки сети.';
- if(['insufficient_permissions','permission_denied'].includes(d.providerCode))return 'OpenAI отклонил запрос из-за недостаточных разрешений ключа или проекта (HTTP '+d.httpStatus+', '+d.providerCode+').';
- if(d.providerCode==='invalid_api_key')return 'OpenAI не принял API-ключ (invalid_api_key). Проверьте ключ в подключениях.';
- if(d.providerCode==='insufficient_quota')return 'OpenAI: исчерпана квота API (insufficient_quota). Проверьте баланс и лимиты проекта.';
+ if(d.providerCode==='model_not_found')return 'OpenAI: проєкт не має доступу до моделі '+(d.model||'із налаштувань')+' або модель недоступна (HTTP '+d.httpStatus+', model_not_found). Виберіть доступну модель або перевірте дозволи проєкту.';
+ if(d.providerCode==='unsupported_country_region_territory')return 'OpenAI відхилив запит із непідтримуваного регіону (HTTP '+d.httpStatus+', unsupported_country_region_territory). Перевірте регіон сервера й налаштування мережі.';
+ if(['insufficient_permissions','permission_denied'].includes(d.providerCode))return 'OpenAI відхилив запит через недостатні дозволи ключа або проєкту (HTTP '+d.httpStatus+', '+d.providerCode+').';
+ if(d.providerCode==='invalid_api_key')return 'OpenAI не прийняв API-ключ (invalid_api_key). Перевірте ключ у налаштуваннях.';
+ if(d.providerCode==='insufficient_quota')return 'OpenAI: вичерпано квоту API (insufficient_quota). Перевірте баланс і ліміти проєкту.';
  return null;
 }
 export async function readAIDiagnostics(response,model){
@@ -33,22 +33,22 @@ export async function providerFailure(response,model){
 }
 
 const outputIssueMessages={
- UNSUPPORTED_OFFER_CLAIM:'В этом фрагменте найдено утверждение, не подтверждённое исходными данными.',
- MANUAL_FACT_CHANGED:'ИИ изменил факт, введённый вручную.',
- AI_SHAPE_INVALID:'ИИ вернул неполную структуру страницы или лишние поля.',
- AI_TEXT_INVALID:'ИИ вернул слишком короткий, слишком длинный или недопустимый текст.',
- AI_MODEL_LINK_TOKEN:'ИИ добавил служебную метку ссылки вместо обычного текста.',
- AI_LINK_MISSING:'ИИ пропустил обязательное размещение ссылки.',
- AI_LINK_DUPLICATE:'ИИ повторил обязательное размещение ссылки.',
- AI_LINK_MISPLACED:'ИИ поместил ссылку в неподходящее поле.',
- AI_RESPONSE_INVALID:'OpenAI вернул незавершённую или нечитаемую страницу.',
- AI_DESIGN_INVALID:'ИИ вернул неподдерживаемые настройки оформления.',
- AI_LANGUAGE_INVALID:'ИИ вернул некорректный код языка.',
- AI_OUTPUT_TOO_LARGE:'Ответ ИИ превышает допустимый размер страницы.'
+ UNSUPPORTED_OFFER_CLAIM:'У цьому фрагменті знайдено твердження, не підтверджене вихідними даними.',
+ MANUAL_FACT_CHANGED:'ШІ змінив факт, уведений вручну.',
+ AI_SHAPE_INVALID:'ШІ повернув неповну структуру сторінки або зайві поля.',
+ AI_TEXT_INVALID:'ШІ повернув закороткий, задовгий або недопустимий текст.',
+ AI_MODEL_LINK_TOKEN:'ШІ додав службову мітку посилання замість звичайного тексту.',
+ AI_LINK_MISSING:'ШІ пропустив обов’язкове розміщення посилання.',
+ AI_LINK_DUPLICATE:'ШІ повторив обов’язкове розміщення посилання.',
+ AI_LINK_MISPLACED:'ШІ помістив посилання в невідповідне поле.',
+ AI_RESPONSE_INVALID:'OpenAI повернув незавершену або нечитабельну сторінку.',
+ AI_DESIGN_INVALID:'ШІ повернув непідтримувані налаштування оформлення.',
+ AI_LANGUAGE_INVALID:'ШІ повернув некоректний код мови.',
+ AI_OUTPUT_TOO_LARGE:'Відповідь ШІ перевищує допустимий розмір сторінки.'
 };
 const outputRoots=new Set('response plan links cards moreCards language topic title brand brandTagline intro cardsTitle articleTitle faqTitle footerTitle footer footerLinksTitle footerNote ctaLabel tocTitle tableTitle tableText design offers sections faq navLabels linkSentences'.split(' '));
 export function safeAIOutputIssues(value){
  if(!Array.isArray(value))return [];
  return value.slice(0,10).filter(i=>i&&Object.hasOwn(outputIssueMessages,i.code)).map(i=>({code:i.code,...(typeof i.fieldPath==='string'&&i.fieldPath.length<=100&&/^[a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)*$/.test(i.fieldPath)&&outputRoots.has(i.fieldPath.split('.')[0])?{fieldPath:i.fieldPath}:{})}));
 }
-export function aiOutputMessage(value){const issue=safeAIOutputIssues(value)[0];return issue?outputIssueMessages[issue.code]+(issue.fieldPath?' Поле: '+issue.fieldPath+'.':'')+' Страница не подготовлена; ссылки и анкоры сохранены.':null;}
+export function aiOutputMessage(value){const issue=safeAIOutputIssues(value)[0];return issue?outputIssueMessages[issue.code]+(issue.fieldPath?' Поле: '+issue.fieldPath+'.':'')+' Сторінку не підготовлено; посилання й анкори збережено.':null;}

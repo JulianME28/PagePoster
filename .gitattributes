@@ -1,2 +1,6 @@
 desktop/*-package.json text eol=lf
 desktop/*-pnpm-lock.yaml text eol=lf
+
+*.pdf binary
+*.png binary
+*.zip binary

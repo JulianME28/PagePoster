@@ -209,7 +209,7 @@ export function createAIHandler({fetchImpl=globalThis.fetch,timeoutMs=120000,bud
       try{const body=await readJson(request);if(!object(body)||Object.keys(body).length)return json({error:'Перевірка не приймає параметрів.'},400);
         const result=await fetchImpl('https://api.openai.com/v1/models/'+encodeURIComponent(model),{method:'GET',headers:{Authorization:'Bearer '+env.OPENAI_API_KEY.trim()},signal:AbortSignal.any([request.signal,AbortSignal.timeout(15000)])});
         if(!result.ok)return json(await providerFailure(result,model),502);
-        await result.body?.cancel();return json({model,modelAccessible:true,message:'Модель доступна. Проверка не расходует токены; возможность генерации и баланс проверяются при запросе.'});
+        await result.body?.cancel();return json({model,modelAccessible:true,message:'Модель доступна. Перевірка не витрачає токени; можливість генерації й баланс перевіряються під час запиту.'});
       }catch{return json({code:'AI_NETWORK_ERROR',error:'Не вдалося перевірити OpenAI. Перевір інтернет і повтори.'},502);}
     }
     if (active>=2) return json({error:'Генерація вже триває. Дочекайся завершення.'},429);

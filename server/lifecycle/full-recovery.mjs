@@ -104,7 +104,7 @@ function prepareRestoredDatabase(dir,oldKey,newKey){
  for(const row of db.prepare('SELECT id,data FROM sites').all()){const value=JSON.parse(row.data);value.enabled=false;value.bootstrap={...value.bootstrap,restored:true};db.prepare('UPDATE sites SET enabled=0,data=? WHERE id=?').run(JSON.stringify(value),row.id);}
  for(const row of db.prepare("SELECT id,data FROM workspace_records WHERE kind='autopilot'").all()){
   const value=JSON.parse(row.data);for(const [field,identity] of [['candidateCredential',row.id],['alternateCredential',row.id+':alternate'],['apiCredential',row.id+':api'],['manualCredential',row.id+':manual']])if(value[field])value[field]=newBox.encrypt(identity,oldBox.decrypt(identity,value[field]));
-  value.leaseToken=null;value.leaseOwner=null;value.leaseUntil=null;if(['queued','running','publishing','checking','waiting_source'].includes(value.state)){value.state='paused';value.error={code:'RESTORED_PAUSED',message:'Запуск восстановлен из резервной копии. Продолжите его вручную.'};value.revision++;}
+  value.leaseToken=null;value.leaseOwner=null;value.leaseUntil=null;if(['queued','running','publishing','checking','waiting_source'].includes(value.state)){value.state='paused';value.error={code:'RESTORED_PAUSED',message:'Запуск відновлено з резервної копії. Продовжіть його вручну.'};value.revision++;}
   db.prepare('UPDATE workspace_records SET data=? WHERE id=?').run(JSON.stringify(value),row.id);
  }
  const trashActions=db.prepare("SELECT id,data FROM workspace_records WHERE kind='published_trash'").all();
