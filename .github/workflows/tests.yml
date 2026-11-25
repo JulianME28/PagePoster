@@ -27,6 +27,23 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Install Chromium
         run: pnpm exec playwright install chromium
+      - name: Install WinRAR for RAR5 import tests
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          # RARLAB WinRAR 7.23 x64 with the checksum and silent switch from the WinGet manifest.
+          $installer = Join-Path $env:RUNNER_TEMP 'winrar-x64-723uk.exe'
+          Invoke-WebRequest -Uri 'https://www.rarlab.com/rar/winrar-x64-723uk.exe' -OutFile $installer -TimeoutSec 45 -MaximumRetryCount 2
+          $expected = '5D65875C4548B0803BE969D3B5A7393361BA37CB1105A94CEFB6D7A863D7AA23'
+          if ((Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash -ne $expected) {
+            throw 'WinRAR installer SHA-256 mismatch.'
+          }
+          $setup = Start-Process -FilePath $installer -ArgumentList '-s1' -WindowStyle Hidden -Wait -PassThru
+          if ($setup.ExitCode -ne 0) { throw "WinRAR installation exited with code $($setup.ExitCode)." }
+          $unrar = Join-Path $env:ProgramFiles 'WinRAR/UnRAR.exe'
+          if (-not (Test-Path -LiteralPath $unrar -PathType Leaf)) { throw "WinRAR did not install $unrar." }
+      - name: Verify compressed RAR5 import
+        run: node --test --test-name-pattern "reads compressed RAR5 from WinRAR" tests/project-normalizer.test.cjs
       - name: Install native PHP 5.6
         uses: shivammathur/setup-php@v2
         with:
@@ -40,5 +57,7 @@ jobs:
           $version = & $php -n -r 'echo PHP_VERSION_ID;'
           if ($LASTEXITCODE -ne 0 -or [int]$version -lt 50600 -or [int]$version -ge 50700) { throw "Expected PHP 5.6, got $version" }
           "PAGEPOSTER_PHP56=$php" >> $env:GITHUB_ENV
+      - name: Verify checkout byte integrity
+        run: node --test tests/bridge-package.test.cjs tests/cleaner-verifier-composed.test.cjs tests/desktop-launcher.test.cjs tests/distribution.test.cjs
       - name: Run full suite
         run: pnpm test:full

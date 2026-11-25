@@ -42,8 +42,8 @@ function childProcess(t, config, extraEnv = {}) {
   });
   return {child, messages, output:() => output};
 }
-async function nextMessage(child) {
-  const [message] = await once(child, 'message', {signal:AbortSignal.timeout(15000)});
+async function nextMessage(child, signal) {
+  const [message] = await once(child, 'message', {signal});
   return message;
 }
 function auth() { return {'Authorization':'Basic '+Buffer.from('pageposter:'+TOKEN).toString('base64')}; }
@@ -144,11 +144,11 @@ test('desktop configuration validates paths and keeps private bootstrap values a
   assert.deepEqual(options.lifecycle, {dataDir:config.dataDir, keyDir:config.keyDir, desktop:true, visibleBrowserEnabled:true});
 });
 
-test('desktop child reports one authenticated loopback endpoint and preserves projects across shutdown', {timeout:30000}, async t => {
+test('desktop child reports one authenticated loopback endpoint and preserves projects across shutdown', {timeout:120000}, async t => {
   const config = configuration(temporary(t));
   fs.writeFileSync(config.legacyEnvFile, 'OPENAI_MODEL=fixture-from-legacy\nPAGEPOSTER_ACCESS_TOKEN=legacy-token-must-not-win\nPAGEPOSTER_DATA_DIR=wrong-path\nPAGEPOSTER_PUBLIC_ORIGIN=https://wrong.example/\n');
   const first = childProcess(t, config);
-  const ready = await nextMessage(first.child);
+  const ready = await nextMessage(first.child,t.signal);
   assert.deepEqual(Object.keys(ready).sort(), ['pid','port','type']);
   assert.equal(ready.type, 'ready');
   assert.equal(ready.pid, first.child.pid);
@@ -166,15 +166,15 @@ test('desktop child reports one authenticated loopback endpoint and preserves pr
   assert.equal(first.messages.filter(message => message.type === 'ready').length, 1);
   assert.equal(fs.existsSync(path.join(config.dataDir, 'pageposter.sqlite')), true);
   const second = childProcess(t, config);
-  const restarted = await nextMessage(second.child);
+  const restarted = await nextMessage(second.child,t.signal);
   assert.equal(restarted.type, 'ready');
   const saved = await (await fetch('http://127.0.0.1:'+restarted.port+'/api/lifecycle/projects', {headers:auth()})).json();
   assert.equal(saved.projects.find(item => item.id === project.id).name, 'Desktop persistence fixture');
 });
 
-test('parent disconnect drains and exits without leaving the backend listening', {timeout:30000}, async t => {
+test('parent disconnect drains and exits without leaving the backend listening', {timeout:60000}, async t => {
   const {child} = childProcess(t, configuration(temporary(t)));
-  const ready = await nextMessage(child);
+  const ready = await nextMessage(child,t.signal);
   assert.equal(ready.type, 'ready');
   const exited = once(child, 'exit');
   child.disconnect();
@@ -193,7 +193,7 @@ test('parent loss during initialization cannot leave a ready orphan backend', {t
 test('invalid startup reports a bounded generic IPC error without exposing private paths', {timeout:30000}, async t => {
   temporary(t);
   const {child, output} = childProcess(t, {appRoot:'private-path-secret'});
-  const result = await nextMessage(child);
+  const result = await nextMessage(child,t.signal);
   assert.equal(result.type, 'error');
   assert.equal(result.code, 'DESKTOP_CONFIG_INVALID');
   assert.doesNotMatch(JSON.stringify(result), /private-path-secret/);

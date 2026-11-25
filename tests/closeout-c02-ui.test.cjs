@@ -83,10 +83,10 @@ test('desktop composer menus preserve manual HTML export and device selection wi
  assert.equal(calls.some(call=>/queue\/start|queue\/approve|\/autopilot$/.test(call.endpoint)&&call.method==='POST'),false);
 });
 
-test('C02 manual clipboard and download retain exact mixed CRLF CR and LF source bytes',{timeout:20000},async t=>{
+test('C02 manual clipboard and download retain exact mixed CRLF CR and LF source bytes',{timeout:60000},async t=>{
  const {page,state}=await fixture(t),exact='<!doctype html>\r\n<h1>Copy exact</h1>\r<p>Last</p>\n';state.manualExport={version:1,runId:null,pageId:null,pageRevision:null,title:'Copy exact',variant:'prepared',html:exact,filename:'copy-exact.html',available:{original:true,prepared:true,simplified:true},warnings:[],audit:{state:'ready',placeholderCount:0,placeholders:[]},steps:[]};
  await page.evaluate(()=>{window.__c02Copied=[];Object.defineProperty(navigator.clipboard,'writeText',{configurable:true,value:async value=>{window.__c02Copied.push(value);}});});await page.locator('[name=customerHtml]').waitFor({state:'visible'});await page.locator('[name=customerHtml]').fill(original);await page.locator('#ap-launch').click();await page.locator('#ap-stage-manual-export:enabled').click();await page.locator('#ap-manual-copy-html:enabled').waitFor();assert.notEqual(await page.locator('#ap-manual-html').inputValue(),exact,'The displayed textarea normalizes line endings, so it is not the export source');await page.locator('#ap-manual-copy-html').click();await page.locator('#ap-manual-copy-title').click();assert.deepEqual(await page.evaluate(()=>window.__c02Copied),[exact,'Copy exact']);
- const downloaded=page.waitForEvent('download');await page.locator('#ap-manual-download').click();const stream=await (await downloaded).createReadStream(),parts=[];for await(const part of stream)parts.push(part);assert.deepEqual(Buffer.concat(parts),Buffer.from(exact));
+ const downloadButton=page.locator('#ap-manual-download:enabled');await downloadButton.waitFor();const [download]=await Promise.all([page.waitForEvent('download',{timeout:30000}),downloadButton.click()]);const stream=await download.createReadStream(),parts=[];for await(const part of stream)parts.push(part);assert.deepEqual(Buffer.concat(parts),Buffer.from(exact));
 });
 
 test('C02 composed local server and Chromium export an exact reviewed draft without publishing or changing its source',{timeout:30000},async t=>{

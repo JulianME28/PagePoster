@@ -4,3 +4,18 @@
 *.zip binary
 *.ico binary
 *.rar binary
+
+# Preserve the source bytes covered by the desktop release manifest and hosted bundle.
+assets/** -text !eol
+desktop/** -text !eol
+dist/** -text !eol
+server/** -text !eol
+wordpress/pageposter-bridge/** -text !eol
+THIRD-PARTY-NOTICES.txt -text !eol
+desktop/*-package.json text eol=lf
+desktop/*-pnpm-lock.yaml text eol=lf
+
+# PHP sources used by the tests must match the shipped Clean Links ZIP.
+wordpress/pageposter-clean-links/**/*.php -text !eol
+
+*.cmd text eol=crlf

@@ -74,7 +74,7 @@ test('screenshots are viewport-bounded PNG files generated only inside the chose
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'pp-browser-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
  const result=await verify({artifactDir:dir});
  for(const view of result.viewports){
-  const relative=path.relative(fs.realpathSync(dir),view.screenshot.path);
+  const relative=path.relative(fs.realpathSync.native(dir),fs.realpathSync.native(view.screenshot.path));
   assert.ok(relative&&!relative.startsWith('..')&&!path.isAbsolute(relative));
   const bytes=fs.readFileSync(view.screenshot.path);assert.equal(bytes.subarray(1,4).toString(),'PNG');
   assert.equal(bytes.readUInt32BE(16),view.width);assert.equal(bytes.readUInt32BE(20),view.height);

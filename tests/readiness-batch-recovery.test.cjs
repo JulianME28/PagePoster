@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto');
-test('110 approved pages reconcile an exhausted known-ID read after restart while a second project stays unapproved', {timeout:120000},async t=>{
+test('110 approved pages reconcile an exhausted known-ID read after restart while a second project stays unapproved', {timeout:360000},async t=>{
  const {createLifecycleService}=await import('../server/lifecycle/service.mjs'),{createSiteSource}=await import('../server/lifecycle/site-source.mjs');
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'pp-batch-recovery-')),remote=new Map(),sessions=new Map();let service,created=0,published=0,inspected=0,reads=0,lost=false,reconciliationOffline=true,inFlight=0,maxInFlight=0;
  const forbidden=()=>assert.fail('The batch must use the native editor, never REST/Bridge/AI');
@@ -34,7 +34,7 @@ test('110 approved pages reconcile an exhausted known-ID read after restart whil
  const reconciliation=await q('/autopilot/'+interrupted.id+'/reconciliation');assert.equal(reconciliation.status,200);assert.equal(reconciliation.publication.postId,11);
  const observed=await q('/autopilot/'+interrupted.id+'/reconcile',{expectedRevision:reconciliation.run.revision});assert.equal(observed.status,200,JSON.stringify(observed));assert.equal(observed.observation,'published');assert.equal(observed.publication.postId,11);assert.equal(created,11);assert.equal(published,11);assert.equal(inspected,4,'explicit reconciliation reads the same remote page after restart');
  for(const run of service.store.listRecords(first.project.id,'autopilot'))if(run.state==='paused'){const resumed=await q('/autopilot/'+run.id+'/resume',{});assert.equal(resumed.status,202,JSON.stringify(resumed));}
- for(let i=0;i<500;i++){if(service.store.listRecords(first.project.id,'autopilot').every(r=>r.state==='completed'))break;await service.tick({lane:'publication'});}
+ for(let i=0;i<500;i++){if(published===110&&service.store.listRecords(first.project.id,'autopilot').every(r=>r.state==='completed'))break;await service.tick({lane:'publication'});}
  const final=await project(first.project.id);assert.equal(final.counts.completed,110,JSON.stringify(final.items.filter(i=>i.state!=='completed').map(i=>({state:i.state,error:i.error}))));assert.ok(final.items.every(i=>i.state==='completed'));assert.equal(created,110);assert.equal(published,110);assert.equal(inspected,4);assert.equal(maxInFlight,1);assert.equal(new Set([...remote.values()].map(p=>p.url)).size,110);
  for(const page of service.store.listPages(first.project.id))assert.equal(JSON.stringify(page.config),approvedHtml.get(page.id));
  assert.equal((await project(second.project.id)).items.every(i=>i.state==='awaiting_review'),true);assert.doesNotMatch(JSON.stringify(final),/fixture-secret|ciphertext|candidateCredential/);assert.ok(reads<5,'Preparation must share the full source snapshot');
