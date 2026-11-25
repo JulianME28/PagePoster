@@ -5,6 +5,7 @@ import {createSafeTransport,validatePublicUrl} from './network.mjs';
 import {parseSheetReference,buildSourceUrl} from './sheet-reference.mjs';
 import {describeSiteSelection} from './site-selection.mjs';
 import {createGoogleRead} from './google-read.mjs';
+import {donorDomainKey} from './donor-domain.mjs';
 const TOKEN_URL='https://oauth2.googleapis.com/token';
 const READ_SCOPE='https://www.googleapis.com/auth/spreadsheets.readonly';
 const MAX_ROWS=100000,PAGE_ROWS=2000,MAX_ISSUES=1000;
@@ -54,13 +55,18 @@ export function validateSiteSourceConfig(value,{allowMissingAccount=false}={}){
  if(typeof clientEmail!=='string'||! /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail)||typeof privateKey!=='string'||!privateKey||privateKey.length>16000)fail('source_validation');
  result.serviceAccount={clientEmail,privateKey};return result;
 }
+const countryCodes=new Set('AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW'.split(' '));
+function canonicalCountryCode(raw){
+ const code=raw.trim().toUpperCase();
+ return code==='UK'?'GB':countryCodes.has(code)?code:null;
+}
 export function normalizeSiteCriteria(value){
  if(value===undefined||value===null)value={};
  if(!object(value)||Object.keys(value).some(key=>!['minDr','minTraffic','geo'].includes(key)))fail('source_validation');
  const minDr=value.minDr??null,minTraffic=value.minTraffic??null,rawGeo=value.geo??'';
  if(minDr!==null&&(typeof minDr!=='number'||!Number.isFinite(minDr)||minDr<0||minDr>100)||minTraffic!==null&&(!Number.isSafeInteger(minTraffic)||minTraffic<0)||typeof rawGeo!=='string'||rawGeo.length>1000)fail('source_validation');
- const codes=rawGeo.trim()?rawGeo.split(',').map(code=>code.trim().toUpperCase()):[];
- if(codes.some(code=>! /^[A-Z]{2}$/.test(code)))fail('source_validation');
+ const codes=rawGeo.trim()?rawGeo.split(',').map(canonicalCountryCode):[];
+ if(codes.includes(null))fail('source_validation');
  return {minDr,minTraffic,geo:[...new Set(codes)].sort().join(',')};
 }
 function configuration(value,options){const normalized=validateSiteSourceConfig(value,options),range=a1Range(normalized.range);return {...normalized,...range,columns:Object.fromEntries(Object.entries(normalized.columns).map(([key,name])=>[key,column(name)-range.firstColumn])),normalized};}
@@ -88,12 +94,12 @@ function geoCodes(value){
  if(value===undefined||value===null||value==='')return [];
  if(typeof value!=='string'||value.length>4000)return null;
  const text=value.trim();if(!text)return [];
- const plain=text.split(/[,;\s]+/);if(plain.every(code=>/^[a-z]{2}$/i.test(code)))return [...new Set(plain.map(code=>code.toUpperCase()))].sort();
+ const plain=text.split(/[,;\s]+/);if(plain.every(code=>/^[a-z]{2}$/i.test(code))){const codes=plain.map(canonicalCountryCode);return codes.includes(null)?null:[...new Set(codes)].sort();}
  // Sheet exports sometimes store a list of (country, count) tuples. Match the
  // complete representation so "status" never accidentally matches US.
  const codes=[],tuple=/\(\s*(?:'([a-z]{2})'|"([a-z]{2})"|([a-z]{2}))\s*,\s*(?:\d+(?:\.\d+)?|\.\d+)\s*\)/gi;
- const remaining=text.replace(tuple,(_,a,b,c)=>{codes.push((a||b||c).toUpperCase());return '';});
- return codes.length&&!remaining.replace(/[,;\s]/g,'')?[...new Set(codes)].sort():null;
+ const remaining=text.replace(tuple,(_,a,b,c)=>{codes.push(canonicalCountryCode(a||b||c));return '';});
+ return codes.length&&!codes.includes(null)&&!remaining.replace(/[,;\s]/g,'')?[...new Set(codes)].sort():null;
 }
 function credential(username,password){return typeof username==='string'&&username.trim()&&username.length<=256&&!/[\r\n\0:]/.test(username)&&typeof password==='string'&&password.length>0&&password.length<=4096&&!/[\r\n\0]/.test(password)?{username:username.trim(),password}:null;}
 function publicBase(value){
@@ -146,7 +152,7 @@ export function createSiteSource({transport=createSafeTransport({allowWrites:tru
   const config=configuration(input,{allowMissingAccount:!!readSheet||!!getAccessToken}),criteria=normalizeSiteCriteria(rawCriteria);
   if(criteria.minDr!==null&&config.columns.dr===undefined||criteria.minTraffic!==null&&config.columns.traffic===undefined||criteria.geo&&config.columns.geo===undefined)fail('source_validation');
   if(!Array.isArray(usedOrigins)||!Array.isArray(usedRowIds)||usedOrigins.length>MAX_ROWS||usedRowIds.length>MAX_ROWS||usedRowIds.some(id=>typeof id!=='string'||id.length>500))fail('source_validation');
-  const used=new Set();for(const value of usedOrigins){try{used.add(new URL(value).origin);}catch{fail('source_validation');}}
+  const used=new Set();for(const value of usedOrigins){try{used.add(donorDomainKey(value));}catch{fail('source_validation');}}
   const rowIds=new Set(usedRowIds),byOrigin=new Map(),pool=[],diagnosticPool=[],issues=[],requestedGeo=criteria.geo?criteria.geo.split(','):[],inputDiagnostics={unit:'rows',nonempty:0,disabled:0,invalidUrl:0,invalidRow:0,missingCredentials:0};let issueCount=0,sourceIdentity=null;
   const issue=(rowNumber,code)=>{issueCount++;if(issues.length<MAX_ISSUES)issues.push({rowNumber,code});};
   const rankMetrics=config.columns.dr!==undefined||config.columns.traffic!==undefined;
@@ -172,7 +178,7 @@ export function createSiteSource({transport=createSafeTransport({allowWrites:tru
     if(metrics.geo===null){issue(rowNumber,'invalid_geo');metrics.geo=[];}
     const candidate={id,baseUrl:base.href,...chosen,rowNumber,metrics};
     diagnosticPool.push(candidate);
-    if(used.has(base.origin)||rowIds.has(id)||criteria.minDr!==null&&(metrics.dr===null||metrics.dr<criteria.minDr)||criteria.minTraffic!==null&&(metrics.traffic===null||metrics.traffic<criteria.minTraffic)||requestedGeo.length&&!requestedGeo.some(code=>metrics.geo.includes(code)))continue;
+    if(used.has(donorDomainKey(base))||rowIds.has(id)||criteria.minDr!==null&&(metrics.dr===null||metrics.dr<criteria.minDr)||criteria.minTraffic!==null&&(metrics.traffic===null||metrics.traffic<criteria.minTraffic)||requestedGeo.length&&!requestedGeo.some(code=>metrics.geo.includes(code)))continue;
     if(primary&&alternate&&(primary.username!==alternate.username||primary.password!==alternate.password))candidate.alternateCredentials=alternate;
     if(preserveOrigins)pool.push(candidate);else{const previous=byOrigin.get(base.origin);if(!previous||compare(candidate,previous)<0)byOrigin.set(base.origin,candidate);}
    }

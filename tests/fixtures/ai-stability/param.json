@@ -1,0 +1,115 @@
+{
+  "input": {
+    "requestId": "recorded-param",
+    "links": [
+      {
+        "url": "https://script.example/macros/s/fixture/exec",
+        "anchor": "param"
+      }
+    ],
+    "variation": "param"
+  },
+  "plan": {
+    "language": "en",
+    "topic": "Understanding and Using 'param' in Google Apps Script",
+    "title": "A Comprehensive Guide to Using 'param' in Google Apps Script",
+    "brand": "Script Insight",
+    "brandTagline": "Empowering Your Google Scripts with Clarity",
+    "intro": "'param' is a common term in programming and scripting, often referring to parameters passed to functions or scripts. In the context of Google Apps Script, understanding how to utilize 'param' effectively can enhance your script's flexibility and functionality. This guide explores the concept of 'param' within Google Apps Script, how to manage them, and the best practices to follow.",
+    "cardsTitle": "Explore More About 'param'",
+    "articleTitle": "In-Depth Exploration of 'param' in Google Apps Script",
+    "faqTitle": "Frequently Asked Questions about 'param'",
+    "footerTitle": "About Script Insight",
+    "footer": "Script Insight is dedicated to providing clear, objective guides and insights into scripting and programming topics, aiming to empower learners and developers with practical knowledge.",
+    "footerLinksTitle": "Additional Resources",
+    "footerNote": "Always review and understand the source and terms of any script or code you implement.",
+    "ctaLabel": "Learn More About 'param'",
+    "tocTitle": "Contents",
+    "tableTitle": "Comparing Aspects of Parameter Usage in Google Apps Script",
+    "tableText": "Aspect|Consideration\nType of Parameters|Does the script use named or positional parameters?\nParameter Validation|Are inputs validated within the script?\nDefault Values|Are default values assigned to parameters?\nError Handling|How does the script handle missing or invalid parameters?\nDocumentation|Is the parameter usage clearly documented?\nSecurity|Are parameters sanitized to prevent injection or misuse?",
+    "design": {
+      "preset": "emerald",
+      "fontFamily": "Verdana",
+      "colors": {
+        "background": "#f7fef9",
+        "accent": "#28a745",
+        "header": "#155724",
+        "card": "#e6f4ea"
+      }
+    },
+    "offers": [
+      {
+        "linkIndex": 0,
+        "description": "Visit the linked destination to view how 'param' is implemented or used in the given Google Apps Script context. Analyze the example or script provided, noting how parameters are passed, handled, and any specifics explained in the script or documentation.",
+        "button": "Explore 'param' Usage"
+      }
+    ],
+    "sections": [
+      {
+        "title": "What Is 'param' in Google Apps Script?",
+        "body": "In Google Apps Script, the term 'param' usually refers to parameters passed to functions or web apps. These parameters allow the script to receive external data inputs dynamically, which can alter the script's behavior or output based on what is provided. Understanding how to define and use 'param' efficiently enables you to create flexible and reusable scripts. Parameters can be received via event objects, function arguments, or URL query strings in web apps, depending on the context of your script."
+      },
+      {
+        "title": "Passing Parameters to Google Apps Script Web Apps",
+        "body": "When deploying Google Apps Script as a web app, parameters often come as query string values appended to the URL. These can be accessed in your 'doGet(e)' or 'doPost(e)' functions via the event parameter 'e', where 'e.parameter' contains key-value pairs of parameters passed. Learning to read and validate these parameters is essential for ensuring your web app behaves correctly and securely according to user input."
+      },
+      {
+        "title": "Best Practices for Handling Parameters Safely",
+        "body": "Parameters can be a source of errors or security risks if not managed properly. Always validate parameter values to ensure they conform to expected formats and values. Implement default values where appropriate to avoid issues with missing parameters. Moreover, sanitize inputs to prevent injection attacks or unintended script behavior. Proper error handling should also provide meaningful feedback without exposing sensitive information."
+      },
+      {
+        "title": "Using Parameters to Customize Script Behavior",
+        "body": "Parameters enable scripts to adapt their operations based on input. For example, you might pass a parameter determining which spreadsheet to operate on or which function to execute. By designing your scripts to accept parameters thoughtfully, you can reuse the same codebase to handle multiple scenarios, reducing redundancy and improving maintainability."
+      },
+      {
+        "title": "Common Pitfalls When Working with Parameters",
+        "body": "Developers often encounter challenges such as assuming parameters will always be present, neglecting to validate or sanitize inputs, or not accounting for parameter encoding issues in URLs. These pitfalls can lead to script errors or vulnerabilities. Awareness and testing of various parameter scenarios help mitigate such issues and improve the robustness of your scripts."
+      },
+      {
+        "title": "Debugging and Logging Parameter Values",
+        "body": "When scripts do not behave as expected, inspecting parameter values is a crucial step. Utilize Logger.log() or Stackdriver logging to output parameter values and track how data flows through the script. This practice helps identify missing or malformed parameters and supports faster debugging and refinement of your code."
+      },
+      {
+        "title": "Resources to Learn More About Google Apps Script Parameters",
+        "body": "Several official and community resources offer tutorials, examples, and discussions on handling parameters in Google Apps Script. The Google Apps Script documentation details event objects and web app deployment. Additionally, forums such as Stack Overflow and the Google Apps Script community provide practical use cases and troubleshooting tips."
+      }
+    ],
+    "faq": [
+      {
+        "question": "What does 'param' refer to in Google Apps Script?",
+        "answer": "In Google Apps Script, 'param' typically refers to parameters or inputs passed to functions or web apps, allowing scripts to receive dynamic data that can influence their execution."
+      },
+      {
+        "question": "How can I access URL parameters in a Google Apps Script web app?",
+        "answer": "You can access URL parameters in your web app's doGet(e) or doPost(e) functions via the event object 'e', using properties like e.parameter for single values or e.parameters for arrays."
+      },
+      {
+        "question": "Why is it important to validate parameters in scripts?",
+        "answer": "Validating parameters ensures that the inputs your script receives are expected and safe, preventing errors, unexpected behavior, or security vulnerabilities like injection attacks."
+      },
+      {
+        "question": "Can I set default values for parameters in Google Apps Script?",
+        "answer": "Yes, when a parameter might be missing, you can assign default values within your script to maintain consistent behavior and avoid runtime errors."
+      },
+      {
+        "question": "How do parameter errors typically manifest in Google Apps Script?",
+        "answer": "Errors often occur when the script assumes a parameter exists but it is missing or malformed, leading to undefined values or execution failures."
+      },
+      {
+        "question": "Where can I learn more about using parameters in Google Apps Script?",
+        "answer": "Official Google Apps Script documentation, developer forums, and community tutorials are excellent places to deepen your understanding of parameter usage and best practices."
+      }
+    ],
+    "navLabels": {
+      "offers": "Explore Usage",
+      "guide": "Detailed Guide",
+      "faq": "FAQ"
+    },
+    "linkSentences": {
+      "link_0": {
+        "before": "To understand how 'param' can be used practically, consider reviewing the provided example at",
+        "after": "to see the direct application within a Google Apps Script environment."
+      }
+    }
+  }
+}

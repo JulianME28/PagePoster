@@ -1,0 +1,109 @@
+{
+  "input": {
+    "requestId": "stability-3f6ae88e-6eda-48a3-bb79-2d070f831e93",
+    "links": [
+      {
+        "url": "https://offer50.example/?ref=language%2Ftest",
+        "anchor": "casinotest1"
+      }
+    ],
+    "variation": "language-es",
+    "editorial": {
+      "format": "article",
+      "topic": "poker",
+      "customTopic": "",
+      "language": "es"
+    }
+  },
+  "plan": {
+    "language": "es",
+    "topic": "poker",
+    "title": "Habilidad y azar en el póker: qué puede y no puede decir una mano",
+    "brand": "Cartas Claras",
+    "brandTagline": "Explicando las claves del póker con precisión",
+    "intro": "En una partida de póker, cada mano combina decisiones estratégicas y elementos de azar. Analizar qué informa realmente una mano en curso permite entender mejor cómo se juega y evalúa el póker.",
+    "cardsTitle": "Conceptos clave en cada mano",
+    "articleTitle": "Habilidad y azar en póker: análisis de una mano",
+    "faqTitle": "Preguntas frecuentes sobre la interpretación de manos",
+    "footerTitle": "Más sobre póker",
+    "footer": "© 2024 Cartas Claras. Todos los derechos reservados.",
+    "footerLinksTitle": "Recursos adicionales",
+    "footerNote": "Los juegos de póker con apuestas implican riesgos; juegue con responsabilidad.",
+    "ctaLabel": "Ver estrategias y guías",
+    "tocTitle": "Contenido del artículo",
+    "tableTitle": "Comparación: habilidad y azar en un solo mano a mano",
+    "tableText": "Caso hipotético|Resultado visible|Influencia de la habilidad|Influencia del azar\nJugador A decide apostar fuerte|Se observa agresividad|Decide con base en lectura y análisis|Carta oculta puede favorecer o perjudicar\nJugador B no sube la apuesta|Muestra pasividad o precaución|Quizá evita riesgos excesivos|Dependiente de cartas iniciales recibidas\nResultado tras la revelación|Ganador y combinaciones|Decisiones afectan la probabilidad de ganar|No controla cartas ocultas ni próximas",
+    "design": {
+      "preset": "emerald",
+      "fontFamily": "Georgia",
+      "colors": {
+        "background": "#eaf4f4",
+        "accent": "#2a7f62",
+        "header": "#14532d",
+        "card": "#b7dada"
+      }
+    },
+    "offers": [
+      {
+        "linkIndex": 0,
+        "description": "Análisis detallado del impacto de distintas jugadas en póker en casinotest1.",
+        "button": "Visitar casinotest1"
+      }
+    ],
+    "sections": [
+      {
+        "title": "Decidir con información limitada",
+        "body": "En el póker, cada mano se juega con cierta incertidumbre. Un jugador decide sus apuestas y movimientos sin conocer las cartas ocultas de sus rivales o las que pueden salir en la siguiente ronda. Por ejemplo, un jugador puede apostar fuerte con una pareja débil porque cree que induce miedo, mientras que otro puede retirarse aunque tenga mano aceptable si interpreta señales de fuerza. Esto ilustra que la habilidad radica en interpretar la situación actual y anticipar posibles escenarios, pero siempre limitada por el azar que generan las cartas aún por descubrir. La acción de una mano no revela estadísticamente si la decisión fue buena, solo muestra su resultado inmediato, que puede ser suerte o pericia."
+      },
+      {
+        "title": "El resultado inmediato no indica calidad de la decisión",
+        "body": "Ganar una mano no implica siempre haber jugado correctamente. Por ejemplo, un jugador puede apostar agresivamente con una mano débil y ganar porque salió la carta favorable en el river. En cambio, un jugador conservador puede perder una buena mano porque los rivales mejoraron la suya. Este contraste advierte que el resultado de una sola mano no es un indicador fiable de la habilidad grupal. Para valorar decisiones de manera más rigurosa se requiere analizar resultados en múltiples manos, donde las tendencias de juego se hacen evidentes más allá de la variabilidad por azar habitual en una mano aislada. De esta manera se distinguen decisiones informadas de jugadas afortunadas ocasionales o errores sin consecuencias aparentes."
+      },
+      {
+        "title": "La información visible y la interpretación del oponente",
+        "body": "Durante la mano, los jugadores solo ven las apuestas, movimientos y las cartas comunitarias en la mesa. Cada gesto o patrón puede ser una señal que el adversario interpreta para ajustar su estrategia. Por ejemplo, una subida en apuesta puede ser un farol o una señal de mano fuerte. Sin embargo, como lo que no se ve es la verdadera mano del adversario, todas las inferencias son probabilísticas. Habilidad es usar esta información parcial para evaluar riesgos y oportunidades; azar entra cuando lo intuido es incorrecto debido a cartas ocultas o a un comportamiento inesperado. Por eso, el póker es un juego de estrategia imperfecta, que combina análisis y gestión del riesgo ante datos incompletos."
+      },
+      {
+        "title": "Ejemplo hipotético: ganar sin la mejor mano",
+        "body": "Supongamos una mano donde el jugador A tiene una pareja media y el jugador B una pareja alta. El jugador A apuesta agresivamente, haciendo creer que tiene una mano superior. El jugador B, confiado, solo iguala la apuesta esperando ganar. En la carta final (el river), sale un comodín que mejora la mano de A a una trinca, ganando la partida. En este escenario, la habilidad de A para manipular la percepción de B y tomar riesgos se combina con el azar de la carta de river. La mano ganada por A no revela si la subida inicial fue correcta, sino que refleja el balance entre la estrategia empleada y el factor suerte presente en esa ronda particular. Con sólo esa mano no se puede juzgar el nivel de habilidad con certeza."
+      },
+      {
+        "title": "Impacto de la varianza y la gestión a largo plazo",
+        "body": "La varianza es la fluctuación natural en resultados causada por el azar durante las manos individuales. En póker, incluso los jugadores expertos pueden pasar por malas rachas o tener suerte inesperada en corto plazo. Por eso, es crucial evaluar el desempeño del juego mediante varias partidas o torneos para contener el efecto de estas oscilaciones. En otras palabras, la habilidad se manifiesta en la toma de buenas decisiones repetidas, reduciendo pérdidas en momentos adversos y maximizando ganancias en momentos favorables. Analizar una sola mano no permite esta perspectiva, que sólo se alcanza con el análisis estadístico y experiencia acumulada del juego extendido en el tiempo y las manos jugadas."
+      },
+      {
+        "title": "Por qué revisar estrategias más allá de la mano actual",
+        "body": "Focalizarse exclusivamente en el resultado inmediato de una mano conduce a conclusiones erróneas sobre la eficacia de una estrategia. Sin embargo, revisar las decisiones tomadas, plantear escenarios alternativos y anticipar respuestas posibles mejora el juego. Por ejemplo, si tras perder una mano un jugador evalúa si su apuesta fue adecuada según la información disponible entonces, puede ajustar su estilo de juego para futuras manos. El aprendizaje del póker implica entender cuándo el azar influenció el resultado y cuándo las decisiones causaron ese resultado. La reflexión continua y objetiva es la herramienta principal para progresar en habilidad, más allá de lo que una única mano revele superficialmente."
+      }
+    ],
+    "faq": [
+      {
+        "question": "¿Puede una mano ganadora demostrar que el jugador es hábil?",
+        "answer": "No necesariamente. Una mano ganadora puede depender de la suerte en las cartas que aparecen después de las apuestas iniciales y no reflejar la calidad de la decisión tomada."
+      },
+      {
+        "question": "¿Cómo se puede valorar la habilidad en póker si las cartas son azarosas?",
+        "answer": "Se debe analizar el desempeño en muchas manos, viendo patrones en la toma de decisiones y no basarse en resultados de manos aisladas."
+      },
+      {
+        "question": "¿Qué información se puede interpretar durante una mano?",
+        "answer": "Las apuestas, tiempos de reacción y comportamientos ofrecen pistas sobre la fuerza percibida de la mano, pero siempre con incertidumbre por las cartas ocultas."
+      },
+      {
+        "question": "¿Por qué es importante la gestión a largo plazo en el póker?",
+        "answer": "Porque a corto plazo el azar puede desvirtuar resultados, mientras que a largo plazo la habilidad suele reflejarse en el desempeño general."
+      }
+    ],
+    "navLabels": {
+      "offers": "Ofertas",
+      "guide": "Guía",
+      "faq": "Preguntas"
+    },
+    "linkSentences": {
+      "link_0": {
+        "before": "Para un estudio más profundo sobre jugadas y estrategias, consulte",
+        "after": "en este recurso especializado."
+      }
+    }
+  }
+}

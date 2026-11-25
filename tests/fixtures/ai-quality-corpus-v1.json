@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "topic": "poker",
+  "cases": {
+    "en": {
+      "geo": "GB",
+      "format": "discussion",
+      "independent": [
+        "A hand history makes more sense when the reader separates the information available before each decision from what became known afterwards. Write down the order of actions, note who still had a decision to make, and mark the cards that were public at that point. Keep later information on a separate line.",
+        "When two people discuss the same poker hand, ask each to describe the first moment when they would have wanted more information. One may ask how long the other player paused, while the other wants the sequence of earlier actions. Check which details the record actually contains before weighing the two explanations."
+      ]
+    },
+    "es": {
+      "geo": "ES",
+      "format": "guide",
+      "independent": [
+        "Para reconstruir una mano de póker, anota primero qué jugadores estaban todavía en la mesa y en qué orden actuaron. Separa las cartas visibles de las que se conocieron al final. Una línea por cada decisión permite seguir la secuencia con calma y evita explicar una acción anterior con información que solo apareció después.",
+        "Después, comparte la secuencia con otra persona sin darle tu interpretación. Pídele que señale el primer punto en el que necesitaría más información para entender una jugada. Es posible que falte el tamaño de una apuesta o que dos acciones se hayan anotado juntas. Corrige esos detalles antes de discutir las intenciones de los jugadores."
+      ]
+    },
+    "pl": {
+      "geo": "PL",
+      "format": "blog_post",
+      "independent": [
+        "Gdy wracasz do rozdania pokera zapisanego poprzedniego dnia, zacznij od odtworzenia kolejności ruchów. Zaznacz graczy pozostających w rozdaniu i zapisz, które karty leżały wtedy na stole. Odsłonięte na końcu karty umieść w osobnej rubryce. Dzięki temu zauważysz, gdzie zapis opisuje podjętą decyzję, a gdzie zawiera późniejszą interpretację jej wyniku.",
+        "Daj drugiej osobie sam opis rozdania i poproś o wskazanie miejsca, w którym przestaje rozumieć sytuację. Może brakować informacji o graczu, który odpuścił jeszcze przed kolejną rundą, albo o wielkości wcześniejszej stawki. Uzupełnij dające się potwierdzić szczegóły i pozostaw wyraźnie zaznaczone luki."
+      ]
+    },
+    "de": {
+      "geo": "DE",
+      "format": "faq",
+      "independent": [
+        "Wer eine Pokerhand im Nachhinein bespricht, kann zunächst alle Aktionen in ihrer tatsächlichen Reihenfolge aufschreiben. Welche Karten waren zu diesem Zeitpunkt offen, und wer musste noch handeln? Die erst später gezeigten Karten gehören in einen eigenen Abschnitt. So bleibt sichtbar, auf welche Beobachtungen sich eine Erklärung stützen kann.",
+        "Anschließend kann eine zweite Person das Protokoll lesen und die Stellen markieren, an denen ihr die Abfolge unklar bleibt. Vielleicht fehlt eine Aktion, oder eine Angabe lässt zwei verschiedene Deutungen zu. Ergänzen Sie nur, was sich aus der ursprünglichen Aufzeichnung ableiten lässt. Eine offen benannte Lücke ist hilfreicher als eine nachträglich erfundene Einzelheit."
+      ]
+    },
+    "fr": {
+      "geo": "FR",
+      "format": "comparison",
+      "independent": [
+        "Pour raconter une main de poker, commencez par remettre les actions dans leur ordre réel. Notez les cartes visibles et les joueurs qui devaient encore agir à chaque étape. Placez dans une autre colonne les cartes découvertes seulement à la fin. Cette présentation permet de relire la scène du point de vue de la personne qui devait prendre la décision.",
+        "Deux comptes rendus de la même main peuvent privilégier des détails différents. Le premier décrit le montant des mises, tandis que le second insiste sur les joueurs encore présents dans le coup. Comparez les deux récits en cherchant le premier endroit où ils divergent. Vérifiez les éléments disponibles à cet instant et laissez les incertitudes visibles."
+      ]
+    }
+  }
+}

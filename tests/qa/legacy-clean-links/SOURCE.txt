@@ -1,0 +1,3 @@
+PagePoster Clean Links 1.1.1 PHP sources and GPL license.
+The test suite uses this source snapshot as an independent reference for
+the distributed assets/pageposter-clean-links-1.1.1.zip package.

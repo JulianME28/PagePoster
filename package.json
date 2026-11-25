@@ -1,11 +1,11 @@
 {
   "name": "pageposter-micro-tool",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "WordPress HTML generator with optional server-side OpenAI text generation",
   "main": "desktop/main.cjs",
   "scripts": {
-    "test": "node --test tests/*.test.cjs",
+    "test": "node scripts/test-local.cjs",
     "start": "powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File Start-PagePoster.ps1",
     "start:backend": "node serve.cjs",
     "build": "node build-portable.cjs && node build-hosted.cjs",
@@ -17,9 +17,14 @@
   },
   "packageManager": "pnpm@11.19.0",
   "dependencies": {
-    "dompurify": "3.4.17",
     "css-tree": "3.2.1",
-    "jsdom": "30.1.2"
+    "dompurify": "3.4.17",
+    "jsdom": "30.1.2",
+    "tldts": "7.4.18"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@php-wasm/node-8-4": "3.1.58",
+    "@php-wasm/universal": "3.1.58",
+    "playwright": "1.62.1"
+  }
 }

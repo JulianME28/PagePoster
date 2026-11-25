@@ -1,0 +1,73 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http');
+const playwrightPath=require('./browser-runtime.cjs').playwrightPath,chromePath=require('./browser-runtime.cjs').chromePath;
+test('customer HTML bypasses OpenAI, reviews alterations, preserves mode drafts and retries the exact accepted payload',{timeout:60000,skip:!(fs.existsSync(playwrightPath)&&fs.existsSync(chromePath))},async()=>{
+ const {chromium}=require(playwrightPath),root=path.resolve(__dirname,'../dist'),calls=[],errors=[],projects=[{id:'p1',name:'Первый',revision:1},{id:'p2',name:'Второй',revision:1}],runs={p1:[],p2:[]};let browser,context,launches=0;
+ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://localhost').pathname.slice(1)||'autopilot.html',file=path.resolve(root,name);if(!file.startsWith(root+path.sep)||!fs.existsSync(file)){res.writeHead(404);return res.end('Missing');}res.writeHead(200,{'Content-Type':{'.html':'text/html','.js':'application/javascript','.css':'text/css'}[path.extname(file)]||'text/plain'});res.end(fs.readFileSync(file));});
+ try{
+  await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
+  browser=await chromium.launch({executablePath:chromePath,headless:true,args:['--disable-background-networking','--no-first-run']});context=await browser.newContext({viewport:{width:1200,height:900}});
+  await context.route('**/*',async route=>{const req=route.request(),url=new URL(req.url());if(url.origin!==origin)return route.abort();if(!url.pathname.startsWith('/api/'))return route.continue();const pathname=url.pathname.replace('/api/lifecycle',''),body=req.postDataJSON(),method=req.method();calls.push({path:pathname,body,method});let data;
+   if(pathname==='/autopilot/status')data={source:{configured:false},aiConfigured:false};
+   else if(pathname==='/projects')data={projects};
+   else if(/^\/projects\/p[12]\/jobs$/.test(pathname))data={jobs:[]};
+   else if(/^\/projects\/p[12]\/pages$/.test(pathname))data={pages:[]};
+   else if(/^\/projects\/p[12]\/overview$/.test(pathname))data={pages:[],incidents:[]};
+   else if(/^\/projects\/p[12]\/autopilot$/.test(pathname)&&method==='GET')data={runs:runs[pathname.split('/')[2]]};
+   else if(pathname==='/autopilot/preview')data={html:'<div data-pp-import><h1>Проверенный HTML</h1></div>',title:'Проверенный HTML',warnings:body.html.includes('script')?['Удалён встроенный скрипт.','Внешний CSS может отображаться иначе.']:[],reviewToken:'review-for-'+body.chromeMode};
+   else if(/^\/projects\/p[12]\/autopilot$/.test(pathname)&&method==='POST'){launches++;if(launches===1)return route.fulfill({status:503,contentType:'application/json',body:'{"error":"Временная потеря ответа"}'});if(launches===3)return route.fulfill({status:409,contentType:'application/json',body:'{"code":"HTML_REVIEW_REQUIRED","error":"Review required"}'});const run={id:'r'+launches,projectId:pathname.split('/')[2],title:'Проверенный HTML',stage:'selecting',state:'waiting_source',pageId:'page'+launches,source:'html'};runs[run.projectId].push(run);data={run};}
+   else return route.fulfill({status:404,contentType:'application/json',body:'{"code":"NOT_FOUND"}'});
+   return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
+  });
+  const page=await context.newPage();page.setDefaultTimeout(15000);page.on('pageerror',e=>errors.push(e.message));await page.goto(origin+'/autopilot.html');await page.getByRole('heading',{name:'Первый',exact:true}).waitFor();
+  assert.equal(await page.locator('[name=contentSource][value=ai]').isChecked(),true);assert.equal(await page.locator('#ap-stage-publish').isDisabled(),true);
+  await page.locator('[name=linkUrl]').fill('https://original.example/?ref=%2F');await page.locator('[name=linkAnchor]').fill('  Точный анкор  ');
+  await page.getByLabel('Готовий HTML',{exact:true}).check();
+  const raw='<!doctype html><html lang="pl"><head><style>.card{color:#123456}</style></head><body><h1>Мой HTML</h1><script>original()</script></body></html>';
+  await page.locator('[name=customerHtml]').fill(raw);assert.equal(await page.locator('#ap-stage-publish').isDisabled(),true);assert.equal(await page.locator('#ap-launch').isEnabled(),true);
+  await page.getByLabel('Лише перекрити хедер і футер сайту',{exact:true}).check();await page.locator('.ap-html-options>summary').click();
+  await page.locator('[name=htmlBaseUrl]').fill('https://assets.example/path/');await page.locator('[name=htmlBrand]').fill('Мой бренд');await page.locator('[name=htmlBrandUrl]').fill('https://brand.example/?ref=%2F&x=1');
+  await page.getByRole('button',{name:'Підготувати й переглянути',exact:true}).click();await page.frameLocator('#ap-stage-frame').getByRole('heading',{name:'Проверенный HTML'}).waitFor();assert.equal(await page.locator('#ap-preview[open]').count(),0);
+  await page.getByText('Удалён встроенный скрипт.',{exact:true}).waitFor();assert.equal(await page.locator('#ap-stage-publish').isDisabled(),true);assert.equal(calls.some(c=>c.path==='/projects/p1/autopilot'&&c.method==='POST'),false);
+  await page.getByLabel('Я переглянув зміни й дозволяю публікацію цього HTML',{exact:true}).check();await page.locator('#ap-stage-publish').click();await page.getByText('Временная потеря ответа',{exact:true}).waitFor();
+  const first=calls.find(c=>c.path==='/projects/p1/autopilot'&&c.method==='POST');assert.deepEqual({...first.body,idempotencyKey:'stable'}, {idempotencyKey:'stable',source:'html',html:raw,baseUrl:'https://assets.example/path/',brand:'Мой бренд',brandUrl:'https://brand.example/?ref=%2F&x=1',chromeMode:'overlay-only',reviewToken:'review-for-overlay-only'});
+  await page.locator('#ap-retry-launch').click();await page.locator('.ap-run').waitFor();const retried=calls.filter(c=>c.path==='/projects/p1/autopilot'&&c.method==='POST');assert.equal(retried.length,2);assert.deepEqual(retried[1].body,first.body);assert.equal(calls.filter(c=>c.path==='/autopilot/preview').length,1,'A retry keeps the reviewed exact HTML and does not create a second preview contract');
+  await page.getByLabel('ШІ за посиланнями й анкорами',{exact:true}).check();assert.equal(await page.locator('[name=linkAnchor]').inputValue(),'  Точный анкор  ');assert.equal(await page.getByLabel('Створити наші хедер і футер',{exact:true}).isChecked(),true);
+  await page.getByLabel('Готовий HTML',{exact:true}).check();assert.equal(await page.locator('[name=customerHtml]').inputValue(),raw);assert.equal(await page.getByLabel('Лише перекрити хедер і футер сайту',{exact:true}).isChecked(),true);
+  await page.getByRole('button',{name:'Второй',exact:true}).click();await page.getByLabel('Готовий HTML',{exact:true}).check();assert.equal(await page.locator('[name=customerHtml]').inputValue(),'');
+  const uploaded='<!doctype html><html><body><h1>Файл — точный HTML</h1></body></html>';await page.locator('#ap-html-file').setInputFiles({name:'page.html',mimeType:'text/html',buffer:Buffer.from(uploaded)});await page.waitForFunction(value=>document.querySelector('[name=customerHtml]').value===value,uploaded);
+  assert.equal(await page.locator('#ap-stage-publish').isDisabled(),true);await page.locator('#ap-launch').click();await page.frameLocator('#ap-stage-frame').getByRole('heading',{name:'Проверенный HTML'}).waitFor();assert.equal(await page.locator('#ap-preview[open]').count(),0);assert.equal(await page.locator('[name=acceptHtmlChanges]').count(),0);await page.locator('#ap-stage-publish').click();await page.getByText('HTML змінився або перегляд застарів. Перегляньте поточний варіант ще раз.',{exact:true}).waitFor();assert.equal(await page.locator('#ap-stage-publish').isDisabled(),true);assert.equal(await page.locator('#ap-html-review').isVisible(),false);await page.locator('#ap-launch').click();await page.frameLocator('#ap-stage-frame').getByRole('heading',{name:'Проверенный HTML'}).waitFor();assert.equal(await page.locator('#ap-preview[open]').count(),0);await page.locator('#ap-stage-publish').click();await page.locator('.ap-run').waitFor();const fileLaunch=calls.find(c=>c.path==='/projects/p2/autopilot'&&c.method==='POST');assert.equal(fileLaunch.body.html,uploaded);assert.equal(fileLaunch.body.chromeMode,'custom');assert.equal(fileLaunch.body.source,'html');assert.equal(fileLaunch.body.links,undefined);assert.equal(fileLaunch.body.reviewToken,'review-for-custom');
+  await page.locator('#ap-html-file').setInputFiles({name:'large.html',mimeType:'text/html',buffer:Buffer.alloc(500001,65)});await page.getByText('HTML має бути не більшим за 500 000 байт у UTF-8.',{exact:true}).waitFor();assert.equal(await page.locator('[name=customerHtml]').inputValue(),uploaded);
+  await page.locator('[name=customerHtml]').fill('я'.repeat(250001));assert.equal(await page.locator('#ap-stage-publish').isDisabled(),true);assert.equal(await page.getByRole('button',{name:'Підготувати й переглянути',exact:true}).isDisabled(),true);
+  await page.getByRole('button',{name:'Первый',exact:true}).click();assert.equal(await page.locator('[name=customerHtml]').inputValue(),raw);assert.equal(await page.getByLabel('Лише перекрити хедер і футер сайту',{exact:true}).isChecked(),true);
+  await page.locator('[name=customerHtml]').fill(raw+'\n');assert.equal(await page.locator('[name=acceptHtmlChanges]').isVisible(),false,'Editing after review invalidates the acceptance checkbox');
+  const evidence=path.resolve(__dirname,'../.pageposter/autopilot-ui-evidence');fs.mkdirSync(evidence,{recursive:true});await page.locator('[name=customerHtml]').fill(raw);await page.locator('#ap-launch').click();await page.frameLocator('#ap-stage-frame').getByRole('heading',{name:'Проверенный HTML'}).waitFor();assert.equal(await page.locator('#ap-preview[open]').count(),0);await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:path.join(evidence,'html-desktop.png'),fullPage:true});
+  assert.equal(calls.some(c=>c.path.includes('/api/ai/')),false);await page.setViewportSize({width:390,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));assert.deepEqual(errors,[]);await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:path.join(evidence,'html-mobile.png'),fullPage:true});
+ }finally{await context?.close();await browser?.close();await new Promise(r=>server.close(r));}
+});
+
+
+test('real rendered customer HTML stays visible when preview is reopened and chrome mode changes',{timeout:30000,skip:!(fs.existsSync(playwrightPath)&&fs.existsSync(chromePath))},async()=>{
+ const {prepareCustomerHtml}=await import('../server/lifecycle/customer-html.mjs'),{renderPage}=await import('../server/lifecycle/render.mjs'),{prepareConfig}=await import('../server/lifecycle/workflow.mjs');
+ const {chromium}=require(playwrightPath),root=path.resolve(__dirname,'../dist');let browser,context,previewCalls=0;
+ const source='<html><head><title>Customer material</title><style>body{margin:0;background:#f2faf5;color:#17352c;font:18px Arial}main{max-width:850px;margin:50px auto;padding:40px;background:white;border-radius:20px}</style></head><body><main><h1>Customer material</h1><p>Original material.</p><a href="https://example.com/?offer=1">Offer</a></main></body></html>';
+ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://localhost').pathname.slice(1)||'autopilot.html',file=path.resolve(root,name);if(!file.startsWith(root+path.sep)||!fs.existsSync(file)){res.writeHead(404);return res.end('Missing');}res.writeHead(200,{'Content-Type':{'.html':'text/html','.js':'application/javascript','.css':'text/css'}[path.extname(file)]||'text/plain'});res.end(fs.readFileSync(file));});
+ try{await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;browser=await chromium.launch({executablePath:chromePath,headless:true});context=await browser.newContext({viewport:{width:1280,height:900}});
+  await context.route('**/*',async route=>{const req=route.request(),url=new URL(req.url());if(url.origin!==origin)return route.abort();if(!url.pathname.startsWith('/api/'))return route.continue();const endpoint=url.pathname.replace('/api/lifecycle','');let data;
+   if(endpoint==='/autopilot/status')data={source:{configured:false},aiConfigured:false};
+   else if(endpoint==='/projects')data={projects:[{id:'p1',name:'Preview project'}]};
+   else if(endpoint==='/projects/p1/jobs')data={jobs:[]};
+   else if(endpoint==='/projects/p1/pages'||endpoint==='/projects/p1/overview')data={pages:[]};
+   else if(endpoint==='/projects/p1/autopilot'&&req.method()==='GET')data={runs:[]};
+   else if(endpoint==='/autopilot/preview'){previewCalls++;const {source,...input}=req.postDataJSON(),prepared=prepareCustomerHtml(input),rendered=renderPage(prepareConfig(prepared.config));data={html:rendered.html,title:rendered.title,warnings:prepared.warnings,reviewToken:'fixture-'+previewCalls};}
+   else throw Error('Unexpected API operation: '+req.method()+' '+endpoint);
+   return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
+  });
+  const page=await context.newPage();page.setDefaultTimeout(15000);await page.goto(origin+'/autopilot.html');await page.locator('[name=contentSource][value=html]').check();await page.locator('[name=customerHtml]').fill(source);
+  for(const mode of ['overlay-only','custom','custom','overlay-only']){
+   await page.locator('[name=chromeMode][value="'+mode+'"]').check();await page.locator('#ap-launch').click();await page.frameLocator('#ap-stage-frame').locator('#pp-imported-content').getByRole('heading',{name:'Customer material',exact:true}).waitFor();await page.locator('#ap-stage-expand').click();await page.locator('#ap-preview[open]').waitFor();const frame=page.frameLocator('#ap-preview-frame');await frame.locator('#pp-imported-content').getByRole('heading',{name:'Customer material',exact:true}).waitFor({state:'visible',timeout:3000});
+   assert.equal(await frame.locator('#pp-landing > .pp-header, #pp-landing > .pp-footer').count(),mode==='custom'?2:0);assert.equal(await frame.locator('#pp-imported-content .ppi-body').evaluate(n=>getComputedStyle(n).backgroundColor),'rgb(242, 250, 245)');assert.equal(await page.locator('#ap-preview-frame').getAttribute('sandbox'),'allow-scripts');
+   await page.getByRole('button',{name:'Закрити перегляд',exact:true}).click();
+  }assert.equal(previewCalls,3,'Reopening an unchanged preview uses its already reviewed HTML');
+ }finally{await context?.close();await browser?.close();await new Promise(r=>server.close(r));}
+});

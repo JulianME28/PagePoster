@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 
-const roles=['','key','id','title','file','html','slug','donor','placementUrl','url','anchor','links','language','geo','minDr','minTraffic','format','topic','customTopic','baseUrl','brand','brandUrl','chromeMode',
+const roles=['','key','id','title','file','html','slug','donor','placementUrl','url','anchor','links','language','geo','minDr','minTraffic','format','topic','customTopic','cardCount','baseUrl','brand','brandUrl','chromeMode',
  ...Array.from({length:19},(_,index)=>['url'+(index+2),'anchor'+(index+2)]).flat()];
 const privateLabel=/password|passwd|\bpwd\b|\blogin\b|username|api[\s_-]*key|credential|token|secret|парол|лог[іи]н|hasło|contraseña|passwort|mot de passe|[A-Za-z0-9_-]{28,}/iu;
 const safeLabel=/^[\p{L}\p{M}\d _().#/:<>=?%+-]{0,80}$/u;

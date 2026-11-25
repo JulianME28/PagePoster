@@ -1,0 +1,18 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const url='https://docs.google.com/spreadsheets/d/workSheet/edit?gid=178594066#gid=178594066',columns={url:'B',username:'K',password:'L',alternateUsername:'N',alternatePassword:'O',dr:'D',traffic:'E',geo:'F'};
+async function fixture(t){
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'pp-chrome-google-')),{createLifecycleService}=await import('../server/lifecycle/service.mjs');let connected=false,closed=false,read=0,target='';
+ const status=()=>({connected,clientConfigured:true,phase:connected?'connected':'idle',email:'',method:'browser',spreadsheetUrl:target}),googleBrowser={status,connect:async value=>{target=value;connected=true;return status();},readSheet:async config=>{read++;assert.equal(config.sheetId,178594066);return {values:[['domain','','DR','traffic','geo'],['fixture.example','',44,1200,'(pl, 100)','','','','','worker','private-site-pass']]};},disconnect:async()=>{connected=false;return status();},close:async()=>{closed=true;}};
+ const service=await createLifecycleService({dataDir:dir,masterKey:Buffer.alloc(32,69).toString('base64'),googleBrowser});
+ const q=async(route,body)=>{const response=await service.handle(new Request('http://localhost/api/lifecycle'+route,{method:body===undefined?'GET':'POST',headers:{Origin:'http://localhost','X-PagePoster-Request':'1','Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})}));return {httpStatus:response.status,...await response.json()};};
+ t.after(async()=>{await service.close();assert.equal(closed,true);fs.rmSync(dir,{recursive:true,force:true});});return{service,q,get target(){return target;},get read(){return read;}};
+}
+test('Chrome account reads exact gid from one full URL without OAuth client or manual sheet name',async t=>{
+ const f=await fixture(t);assert.equal((await f.q('/google/browser/account')).account.method,'browser');const saved=await f.q('/autopilot/source',{spreadsheetUrl:url,authMode:'browser',columns,headerRows:1});assert.equal(saved.httpStatus,200,JSON.stringify(saved));assert.equal(saved.source.configured,false);assert.equal(saved.source.spreadsheetUrl,'https://docs.google.com/spreadsheets/d/workSheet/edit#gid=178594066');assert.equal(saved.source.sheetId,178594066);
+ const connected=await f.q('/google/browser/connect',{spreadsheetUrl:saved.source.spreadsheetUrl});assert.equal(connected.status.connected,true);assert.equal(f.target,saved.source.spreadsheetUrl);
+ const status=await f.q('/autopilot/status');assert.equal(status.source.configured,true);const check=await f.q('/autopilot/source/check',{});assert.equal(check.candidateCount,1);assert.equal(f.read,1);assert.doesNotMatch(JSON.stringify(check),/private-site-pass|worker/);assert.equal(check.sample[0].domain,'fixture.example');
+ assert.equal((await f.q('/google/browser/disconnect',{})).account.connected,false);assert.equal(f.service.autopilot.status().configured,false);assert.throws(()=>f.service.autopilot.googleAccessToken(),{code:'GOOGLE_BROWSER_IMPORT_UNSUPPORTED'});
+});
+test('a connected Chrome session never marks a different source tab as connected',async t=>{const f=await fixture(t);assert.equal((await f.q('/autopilot/status')).source.authMode,'user');await f.q('/autopilot/source',{spreadsheetUrl:url,authMode:'browser',columns});await f.q('/google/browser/connect',{spreadsheetUrl:'https://docs.google.com/spreadsheets/d/anotherSheet/edit#gid=0'});assert.equal(f.service.autopilot.status().configured,false);assert.equal((await f.q('/autopilot/source/check',{})).code,'SOURCE_NOT_CONFIGURED');assert.equal(f.read,0);});
+module.exports={columns,url};

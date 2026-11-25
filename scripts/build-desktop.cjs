@@ -7,6 +7,7 @@ const {spawnSync} = require('node:child_process');
 const {loadGoogleClient}=require('../server/lifecycle/google-client.cjs');
 
 const ELECTRON_VERSION = '45.0.0';
+const APP_VERSION = require('../desktop/package.json').version;
 const PRODUCTION_DEPENDENCIES = Object.freeze(require('../desktop/production-package.json').dependencies);
 const REQUIRED_APP_FILES = Object.freeze(['desktop/main.cjs','desktop/preload.cjs','desktop/backend.cjs','desktop/runtime.cjs','desktop/policy.cjs','desktop/google-tab.cjs','desktop/icon.ico','desktop/startup.html','desktop/startup.js','server/local.cjs','server/lifecycle/google-client.cjs','dist/index.html','assets/pageposter-clean-links-1.1.1.zip','assets/pageposter-clean-links-1.1.2.zip','assets/pageposter-clean-links-1.1.3.zip','wordpress/pageposter-bridge/pageposter-bridge-0.2.1.zip']);
 const MANIFEST = 'build-manifest.json';
@@ -121,7 +122,7 @@ function writeManifest(stageRoot) {
     if (sensitivePath(name)) throw Error('Sensitive data is not allowed in a desktop package: '+name);
     return {path:name,size:fs.statSync(path.join(stageRoot,name)).size,sha256:hashFile(path.join(stageRoot,name))};
   });
-  const manifest={format:1,application:'PagePoster',version:'1.0.0',electronVersion:ELECTRON_VERSION,algorithm:'sha256',files};
+  const manifest={format:1,application:'PagePoster',version:APP_VERSION,electronVersion:ELECTRON_VERSION,algorithm:'sha256',files};
   fs.writeFileSync(path.join(stageRoot,MANIFEST),JSON.stringify(manifest,null,2)+'\n');
   return manifest;
 }
@@ -140,10 +141,10 @@ function verifyManifest(stageRoot) {
   return manifest;
 }
 
-function createDesktopStage({sourceRoot,stageRoot,buildRoot=path.join(sourceRoot,'.desktop-build'),electronDist,nodeExecutable,productionModules,workspaceRoot=sourceRoot,requireGoogleClient=false,nodeVersion,testEvidence=null}) {
+function createDesktopStage({sourceRoot,stageRoot,buildRoot=path.join(sourceRoot,'.desktop-build'),electronDist,nodeExecutable,productionModules,workspaceRoot=sourceRoot,requireGoogleClient=false,clean=false,nodeVersion,testEvidence=null}) {
   inside(stageRoot,buildRoot);
   if (fs.existsSync(stageRoot)) throw Error('Desktop staging directory already exists: '+stageRoot);
-  const googleClient=loadGoogleClient(path.join(sourceRoot,'desktop/google-client.json'));
+  const googleClient=clean?null:loadGoogleClient(path.join(sourceRoot,'desktop/google-client.json'));
   if(requireGoogleClient&&!googleClient)throw Object.assign(Error('Register PagePoster Desktop in Google Cloud once and run scripts/configure-google-client.cjs before making a release.'),{code:'GOOGLE_CLIENT_REQUIRED'});
   const inputs=nodeVersion&&{sourceSha256:sourceIdentity(sourceRoot,googleClient),locks:lockInputs(sourceRoot),nodeVersion};
   for (const name of [...REQUIRED_APP_FILES,...AMP_APP_FILES]) if (!fs.statSync(path.join(sourceRoot,name),{throwIfNoEntry:false})?.isFile()) throw Error('Missing desktop source: '+name);
@@ -159,8 +160,8 @@ function createDesktopStage({sourceRoot,stageRoot,buildRoot=path.join(sourceRoot
   if (fs.existsSync(path.join(sourceRoot,'THIRD-PARTY-NOTICES.txt'))) copyTree(path.join(sourceRoot,'THIRD-PARTY-NOTICES.txt'),path.join(appRoot,'THIRD-PARTY-NOTICES.txt'));
   copyTree(productionModules,path.join(appRoot,'node_modules'),relative=>!relative || includeModule(relative));
   copyTree(nodeExecutable,path.join(stageRoot,'resources/node/node.exe'));
-  fs.writeFileSync(path.join(appRoot,'package.json'),JSON.stringify({name:'pageposter-desktop',productName:'PagePoster',version:'1.0.0',private:true,main:'desktop/main.cjs',engines:{node:'>=24'},dependencies:PRODUCTION_DEPENDENCIES},null,2)+'\n');
-  fs.writeFileSync(path.join(appRoot,'desktop/bootstrap.json'),JSON.stringify({workspaceRoot:path.resolve(workspaceRoot)},null,2)+'\n');
+  fs.writeFileSync(path.join(appRoot,'package.json'),JSON.stringify({name:'pageposter-desktop',productName:'PagePoster',version:APP_VERSION,private:true,main:'desktop/main.cjs',engines:{node:'>=24'},dependencies:PRODUCTION_DEPENDENCIES},null,2)+'\n');
+  if(!clean)fs.writeFileSync(path.join(appRoot,'desktop/bootstrap.json'),JSON.stringify({workspaceRoot:path.resolve(workspaceRoot)},null,2)+'\n');
   const manifest=writeManifest(stageRoot);
   if(!inputs) return manifest;
   const identity=identityFromManifest(manifest,inputs);
@@ -184,9 +185,9 @@ function verifyRuntime(stageRoot,manifest=verifyManifest(stageRoot)) {
   return result;
 }
 
-function verifyReleaseParity({sourceRoot,stageRoot,electronDist,nodeExecutable,productionModules}) {
+function verifyReleaseParity({sourceRoot,stageRoot,electronDist,nodeExecutable,productionModules,clean=false}) {
   const manifest=verifyManifest(stageRoot), metadata=readReleaseIdentity(stageRoot,manifest);
-  const googleClient=loadGoogleClient(path.join(sourceRoot,'desktop/google-client.json'));
+  const googleClient=clean?null:loadGoogleClient(path.join(sourceRoot,'desktop/google-client.json'));
   const checks=[
     ['source',metadata.sourceSha256,sourceIdentity(sourceRoot,googleClient)],
     ['lockfiles',JSON.stringify(metadata.locks),JSON.stringify(lockInputs(sourceRoot))],
@@ -276,13 +277,14 @@ function ensureDependencies(sourceRoot,buildRoot) {
 
 function main(args=process.argv.slice(2)) {
   if (args[0]==='--verify' && args.length===2) {console.log(JSON.stringify(verifyRuntime(path.resolve(args[1]))));return;}
-  if (args.length) throw Error('Usage: node scripts/build-desktop.cjs [--verify "path/to/PagePoster Desktop"]');
+  const clean=args.length===1&&args[0]==='--clean';
+  if (args.length&&!clean) throw Error('Usage: node scripts/build-desktop.cjs [--clean | --verify "path/to/PagePoster Desktop"]');
   if (process.platform!=='win32') throw Error('Build the Windows desktop application on Windows with Node.js 24.');
   if (Number(process.versions.node.split('.')[0])!==24) throw Error('Use Node.js 24 to build the desktop application; that executable is included in the package.');
   const sourceRoot=path.resolve(__dirname,'..'),buildRoot=path.join(sourceRoot,'.desktop-build');
   const dependencies=ensureDependencies(sourceRoot,buildRoot),stageRoot=path.join(buildRoot,'stage-'+randomUUID());
   try {
-    createDesktopStage({sourceRoot,buildRoot,stageRoot,nodeExecutable:process.execPath,nodeVersion:process.versions.node,requireGoogleClient:true,...dependencies});
+    createDesktopStage({sourceRoot,buildRoot,stageRoot,nodeExecutable:process.execPath,nodeVersion:process.versions.node,requireGoogleClient:!clean,clean,...dependencies});
     const runtime=verifyRuntime(stageRoot);
     console.log(JSON.stringify({staged:stageRoot,...runtime}));
   } catch(error) {

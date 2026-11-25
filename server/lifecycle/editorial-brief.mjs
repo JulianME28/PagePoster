@@ -1,4 +1,5 @@
 // One bounded brief shared by the launch endpoint and the paid AI contracts.
+import {generationLanguages} from './generation-options.mjs';
 export const EDITORIAL_FORMATS=Object.freeze({
  article:'Write an explanatory feature article with a clear thesis, concrete mechanisms, examples and implications. Develop an argument across the sections; do not produce a shopping checklist.',
  guide:'Write a practical guide in numbered steps. Each section is a distinct step with an action, the reason for it and a worked example. Build from essentials to a complete process, without promising success.',
@@ -8,10 +9,10 @@ export const EDITORIAL_FORMATS=Object.freeze({
  faq:'Write a question-and-answer explainer. The FAQ contains the main questions readers actually ask, with direct answers first and explanations second. Article sections explore different follow-up questions in more depth; do not repeat the FAQ.'
 });
 const TOPICS=Object.freeze({casino:'Online casinos',sports_betting:'Sports betting',gambling:'Gambling',slots:'Slot games',poker:'Poker',live_casino:'Live dealer casino games'});
-export const EDITORIAL_LANGUAGES=Object.freeze({en:'English',es:'Spanish',pl:'Polish',de:'German',fr:'French'});
+export const EDITORIAL_LANGUAGES=Object.freeze(Object.fromEntries(Object.entries(generationLanguages).map(([code,entry])=>[code,entry[0]])));
 export function editorialActionLabel(value){
  const brief=normalizeEditorial(value),casino=['casino','gambling','slots','poker','live_casino'].includes(brief.topic);
- const labels={en:['Visit casino','View website'],es:['Visitar casino','Ver sitio web'],pl:['Odwiedź kasyno','Zobacz stronę'],de:['Casino besuchen','Website öffnen'],fr:['Visiter le casino','Voir le site']};
+ const labels=Object.fromEntries(Object.entries(generationLanguages).map(([code,entry])=>[code,entry.slice(2)]));
  return labels[brief.language||'en'][casino?0:1];
 }
 const ANGLES=Object.freeze({

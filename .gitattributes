@@ -1,6 +1,6 @@
-desktop/*-package.json text eol=lf
-desktop/*-pnpm-lock.yaml text eol=lf
-
+* text=auto eol=lf
 *.pdf binary
 *.png binary
 *.zip binary
+*.ico binary
+*.rar binary

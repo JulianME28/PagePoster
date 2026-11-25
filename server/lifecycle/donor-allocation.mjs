@@ -1,16 +1,18 @@
 import {validatePublicUrl} from './network.mjs';
 import {normalizeSiteCriteria} from './site-source.mjs';
 import {isDeepStrictEqual} from 'node:util';
+import {donorDomainKey} from './donor-domain.mjs';
 
 const byId=(a,b)=>a.id<b.id?-1:a.id>b.id?1:a.index-b.index;
 const originSet=values=>new Set((values||[]).map(value=>new URL(value).origin));
+const domainSet=values=>new Set((values||[]).map(donorDomainKey));
 
 function validCredentials(candidate){
  return !!candidate&&typeof candidate==='object'&&typeof candidate.username==='string'&&!!candidate.username.trim()&&candidate.username.length<=256&&!/[\r\n\0:]/.test(candidate.username)&&typeof candidate.password==='string'&&!!candidate.password&&candidate.password.length<=4096&&!/[\r\n\0]/.test(candidate.password);
 }
 function validCandidate(candidate){
  if(!candidate||typeof candidate!=='object'||typeof candidate.id!=='string'||!candidate.id||candidate.id.length>500||!validCredentials(candidate))return null;
- try{return {candidate,origin:validatePublicUrl(candidate.baseUrl).origin};}catch{return null;}
+ try{const url=validatePublicUrl(candidate.baseUrl);return {candidate,origin:url.origin,domain:donorDomainKey(url)};}catch{return null;}
 }
 const metadata=candidate=>Object.fromEntries(Object.entries(candidate).filter(([name])=>!['username','password','alternateCredentials'].includes(name)));
 
@@ -37,9 +39,9 @@ function matches(candidate,criteria,countries){
  */
 export function allocateDonors(requests,candidates,{usedOrigins=[],usedRowIds=[],candidateFor}={}){
  if(candidateFor!==undefined&&typeof candidateFor!=='function')throw new TypeError('candidateFor must be a function.');
- const blockedOrigins=originSet(usedOrigins),blockedIds=new Set(usedRowIds),selected=new Map(),failures=new Map();
- const entries=requests.map((request,index)=>({request,id:request.id,index,usedOrigins:originSet(request.usedOrigins),usedIds:new Set(request.usedRowIds||[])}));
- const unavailable=(entry,row)=>blockedOrigins.has(row.origin)||blockedIds.has(row.candidate.id)||entry.usedOrigins.has(row.origin)||entry.usedIds.has(row.candidate.id);
+ const blockedOrigins=domainSet(usedOrigins),blockedIds=new Set(usedRowIds),selected=new Map(),failures=new Map();
+ const entries=requests.map((request,index)=>({request,id:request.id,index,usedOrigins:domainSet(request.usedOrigins),usedIds:new Set(request.usedRowIds||[])}));
+ const unavailable=(entry,row)=>blockedOrigins.has(row.domain)||blockedIds.has(row.candidate.id)||entry.usedOrigins.has(row.domain)||entry.usedIds.has(row.candidate.id);
  const forRequest=(entry,row)=>{
   if(!candidateFor)return row;
   // Snapshot source metadata once per row. Per-request account changes cannot
@@ -47,7 +49,7 @@ export function allocateDonors(requests,candidates,{usedOrigins=[],usedRowIds=[]
   if(!Object.hasOwn(row,'metadata'))row.metadata=structuredClone(metadata(row.candidate));
   const candidate=candidateFor(entry.request,row.candidate);
   if(!validCredentials(candidate)||candidate.alternateCredentials!=null&&!validCredentials(candidate.alternateCredentials)||!isDeepStrictEqual(row.metadata,metadata(candidate)))return null;
-  return {candidate,origin:row.origin};
+  return {candidate,origin:row.origin,domain:row.domain};
  };
  const pinned=entries.filter(entry=>Object.hasOwn(entry.request,'pinnedCandidate')).sort(byId);
  for(const entry of pinned){
@@ -55,7 +57,7 @@ export function allocateDonors(requests,candidates,{usedOrigins=[],usedRowIds=[]
   if(!row){failures.set(entry,{reason:'pinned_unavailable',eligibleOrigins:0});continue;}
   if(unavailable(entry,row)){failures.set(entry,{reason:'pinned_reserved',eligibleOrigins:0});continue;}
   row=forRequest(entry,row);if(!row){failures.set(entry,{reason:'pinned_unavailable',eligibleOrigins:0});continue;}
-  selected.set(entry,row.candidate);blockedOrigins.add(row.origin);blockedIds.add(row.candidate.id);
+  selected.set(entry,row.candidate);blockedOrigins.add(row.domain);blockedIds.add(row.candidate.id);
  }
 
  const automatic=entries.filter(entry=>!Object.hasOwn(entry.request,'pinnedCandidate'));
@@ -68,9 +70,9 @@ export function allocateDonors(requests,candidates,{usedOrigins=[],usedRowIds=[]
    const allowed=entry.request.allowedOrigins===undefined?null:originSet(entry.request.allowedOrigins),seen=new Set();
    entry.choices=[];
    for(const row of rows){
-    if(unavailable(entry,row)||allowed&&!allowed.has(row.origin)||seen.has(row.origin)||!matches(row.candidate,criteria,countries))continue;
+    if(unavailable(entry,row)||allowed&&!allowed.has(row.origin)||seen.has(row.domain)||!matches(row.candidate,criteria,countries))continue;
     const eligible=forRequest(entry,row);if(!eligible)continue;
-    seen.add(row.origin);
+    seen.add(row.domain);
     if(entry.choices.length<limit)entry.choices.push(eligible);
    }
    entry.eligibleOrigins=seen.size;
@@ -86,14 +88,14 @@ export function allocateDonors(requests,candidates,{usedOrigins=[],usedRowIds=[]
   const owners=new Map();
   for(const start of automatic){
    // Prefer a free donor over disturbing a higher-priority request's choice.
-   const free=start.choices.find(row=>!owners.has(row.origin));
-   if(free){owners.set(free.origin,start);selected.set(start,free.candidate);continue;}
+   const free=start.choices.find(row=>!owners.has(row.domain));
+   if(free){owners.set(free.domain,start);selected.set(start,free.candidate);continue;}
    // Breadth-first augmenting paths keep the search iterative for large batches.
    const parents=new Map([[start,null]]),queue=[start];let endpoint=null;
    search:for(let cursor=0;cursor<queue.length;cursor++){
     const entry=queue[cursor];
     for(const row of entry.choices){
-     const owner=owners.get(row.origin);
+     const owner=owners.get(row.domain);
      if(!owner){endpoint={entry,row};break search;}
      if(!parents.has(owner)){parents.set(owner,{entry,row});queue.push(owner);}
     }
@@ -101,7 +103,7 @@ export function allocateDonors(requests,candidates,{usedOrigins=[],usedRowIds=[]
    if(!endpoint){failures.set(start,{reason:start.eligibleOrigins?'insufficient_candidates':'no_candidates',eligibleOrigins:start.eligibleOrigins});continue;}
    let {entry,row}=endpoint;
    for(;;){
-    selected.set(entry,row.candidate);owners.set(row.origin,entry);
+    selected.set(entry,row.candidate);owners.set(row.domain,entry);
     const parent=parents.get(entry);if(!parent)break;
     ({entry,row}=parent);
    }

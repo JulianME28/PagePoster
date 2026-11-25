@@ -3,7 +3,7 @@ const path=require('node:path');
 const root=__dirname;
 const read=name=>fs.readFileSync(path.join(root,name),'utf8').replace(/^\uFEFF/,'');
 const assets={};
-for(const name of ['index.html','autopilot.html','autopilot.css','autopilot-ui.js','autopilot-recovery.js','project-queue.css','project-queue-ui.js','google-account-ui.js','google-account.css','proxy-settings-ui.js','proxy-check-ui.js','workspace-ui.js','workspace.css','styles.css','purify.min.js','csstree.js','html-import.js','html-package.js','project-table.js','project-normalizer.js','page-runtime.js','generator.js','link-placements.js','design-variants.js','ai-core.js','ai-ui.js','plugin-download.js','run-ui.js','campaign-ui.js','lifecycle-ui.js','lifecycle.css','app.js','PagePoster.html']){
+for(const name of ['index.html','autopilot.html','autopilot.css','autopilot-ui.js','autopilot-recovery.js','project-queue.css','project-queue-ui.js','google-account-ui.js','google-account.css','proxy-settings-ui.js','proxy-check-ui.js','workspace-ui.js','workspace.css','styles.css','purify.min.js','csstree.js','html-import.js','html-package.js','project-table.js','project-normalizer.js','generation-options.js','page-runtime.js','generator.js','link-placements.js','design-variants.js','ai-core.js','ai-ui.js','plugin-download.js','run-ui.js','campaign-ui.js','lifecycle-ui.js','lifecycle.css','app.js','PagePoster.html']){
   const type=name.endsWith('.html')?'text/html; charset=utf-8':name.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8';
   assets[name]={body:read('dist/'+name),type};
 }
@@ -15,7 +15,7 @@ const output='const PAGEPOSTER_ASSETS='+JSON.stringify(assets)+';\n'+quality+'\n
 fs.mkdirSync(path.join(root,'dist/server'),{recursive:true});
 fs.mkdirSync(path.join(root,'dist/.openai'),{recursive:true});
 fs.writeFileSync(path.join(root,'dist/server/index.js'),output,'utf8');
-fs.copyFileSync(path.join(root,'.openai/hosting.json'),path.join(root,'dist/.openai/hosting.json'));
+if(fs.existsSync(path.join(root,'.openai/hosting.json')))fs.copyFileSync(path.join(root,'.openai/hosting.json'),path.join(root,'dist/.openai/hosting.json'));
 (async()=>{
  const module=await import('data:text/javascript;base64,'+Buffer.from(output).toString('base64'));
  if(typeof module.default?.fetch!=='function')throw new Error('Invalid Worker export');

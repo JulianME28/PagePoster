@@ -12,7 +12,7 @@ const AUTH='https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN='https://oauth2.googleapis.com/token';
 const USERINFO='https://openidconnect.googleapis.com/v1/userinfo';
 const SCOPES=['https://www.googleapis.com/auth/spreadsheets.readonly','https://www.googleapis.com/auth/drive.readonly','openid','email'];
-const MESSAGES={KEY_REQUIRED:'An encryption key is required to connect Google.',GOOGLE_CLIENT_REQUIRED:'Import a Google Desktop OAuth client first.',GOOGLE_CLIENT_INVALID:'A valid Google Desktop OAuth client JSON is required.',GOOGLE_AUTH_REQUIRED:'Connect your Google account to continue.',GOOGLE_AUTH_FAILED:'Google sign-in could not be completed. Try connecting again.',GOOGLE_AUTH_CANCELLED:'Google sign-in was cancelled.',GOOGLE_AUTH_TIMEOUT:'Google sign-in expired. Try connecting again.'};
+const MESSAGES={KEY_REQUIRED:'An encryption key is required to connect Google.',GOOGLE_CLIENT_REQUIRED:'Import a Google Desktop OAuth client first.',GOOGLE_CLIENT_INVALID:'A valid Google Desktop OAuth client JSON is required.',CONFLICT:'Google registration already exists or is being configured.',GOOGLE_AUTH_REQUIRED:'Connect your Google account to continue.',GOOGLE_AUTH_FAILED:'Google sign-in could not be completed. Try connecting again.',GOOGLE_AUTH_CANCELLED:'Google sign-in was cancelled.',GOOGLE_AUTH_TIMEOUT:'Google sign-in expired. Try connecting again.'};
 const failure=code=>Object.assign(new Error(MESSAGES[code]),{code});
 const fail=code=>{throw failure(code);};
 const object=value=>value&&typeof value==='object'&&!Array.isArray(value);
@@ -54,6 +54,7 @@ function respond(res,success,status=success?200:400){
 
 export async function createGoogleOAuth({dataDir,masterKey,defaultClient=null,transport=createSafeTransport({allowWrites:true,maxBytes:65536,maxRequestBytes:32768}),clock=Date.now,timeoutMs=5*60*1000}={}){
  let box=null,client=null,tokens=null,pending=null,startPromise=null,refreshPromise=null,revision=0,closed=false,closing=false,lastError=null,writes=Promise.resolve();
+ let configuringRevision=0;
  const bundledClient=defaultClient===null?null:clientFrom(defaultClient);
  try{if(masterKey)box=createSecretBox(masterKey);}catch{/* Missing or malformed keys fail closed on credential operations. */}
  const file=join(dataDir,'google-oauth.json');
@@ -102,10 +103,16 @@ export async function createGoogleOAuth({dataDir,masterKey,defaultClient=null,tr
  // the application registration automatically, without a user JSON import.
  if(!client&&bundledClient)client=bundledClient;
 
- async function configure(raw){
-  keyRequired();if(closed||closing)fail('GOOGLE_AUTH_FAILED');const configured=clientFrom(raw),version=++revision;
+ async function configure(raw,{expectedUnconfigured=false}={}){
+  keyRequired();if(closed||closing)fail('GOOGLE_AUTH_FAILED');
+  if(expectedUnconfigured&&(client||configuringRevision))fail('CONFLICT');
+  const configured=clientFrom(raw),version=++revision;
+  // Reserve the empty profile before the first await so a second setup
+  // cannot enter while the first registration is still being saved.
+  configuringRevision=version;
   stop(pending,true);tokens=null;client=null;lastError=null;refreshPromise=null;
   try{await save(version,configured,null);assertCurrent(version);client=configured;return status();}catch(error){if(version===revision)setError('GOOGLE_AUTH_FAILED');throw failure(error?.code==='GOOGLE_AUTH_REQUIRED'?'GOOGLE_AUTH_REQUIRED':'GOOGLE_AUTH_FAILED');}
+  finally{if(configuringRevision===version)configuringRevision=0;}
  }
  async function onCallback(tx,req,res){
   try{

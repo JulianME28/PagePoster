@@ -1,0 +1,44 @@
+name: Full tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+        with:
+          standalone: true
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Chromium
+        run: pnpm exec playwright install chromium
+      - name: Install native PHP 5.6
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '5.6'
+          coverage: none
+          tools: none
+      - name: Verify native PHP and pass its path to the tests
+        shell: pwsh
+        run: |
+          $php = (Get-Command php -CommandType Application).Source
+          $version = & $php -n -r 'echo PHP_VERSION_ID;'
+          if ($LASTEXITCODE -ne 0 -or [int]$version -lt 50600 -or [int]$version -ge 50700) { throw "Expected PHP 5.6, got $version" }
+          "PAGEPOSTER_PHP56=$php" >> $env:GITHUB_ENV
+      - name: Run full suite
+        run: pnpm test:full

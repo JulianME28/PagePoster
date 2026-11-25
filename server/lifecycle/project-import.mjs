@@ -6,14 +6,15 @@ import {normalizeEditorial,EDITORIAL_LANGUAGES} from './editorial-brief.mjs';
 import {normalizeSiteCriteria} from './site-source.mjs';
 import {detectImportFileRegions,normalizeHtmlLanguage} from './import-regions.mjs';
 import {createGoogleRead} from './google-read.mjs';
+import {expandGenerationLinks} from './generation-options.mjs';
 import projectTable from '../../dist/project-table.js';
 
 const MAX_ITEMS=1000,MAX_HTML=500000,MAX_TOTAL=20*1024*1024,MAX_JSON=5*1024*1024;
 const TOKEN_URL='https://oauth2.googleapis.com/token';
 const SCOPES='https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/drive.readonly';
 const FOLDER='application/vnd.google-apps.folder';
-const DEFAULT_KEYS=['language','geo','minDr','minTraffic','format','topic','customTopic','chromeMode','detectFileRegions'];
-const ITEM_KEYS=['key','id','title','source','language','geo','siteSelection','links','editorial','format','topic','customTopic','minDr','minTraffic','html','baseUrl','brand','brandUrl','chromeMode','url','anchor','file','slug','donor','placementUrl','provenance'];
+const DEFAULT_KEYS=['language','geo','minDr','minTraffic','format','topic','customTopic','chromeMode','detectFileRegions','cardCount'];
+const ITEM_KEYS=['key','id','title','source','language','geo','siteSelection','links','editorial','format','topic','customTopic','minDr','minTraffic','html','baseUrl','brand','brandUrl','chromeMode','url','anchor','file','slug','donor','placementUrl','provenance','cardCount'];
 const PARSER_VERSION='pageposter-import/1';
 const PROVENANCE_FIELDS=['key','title','language','geo','minDr','minTraffic','chromeMode','links','format','topic','customTopic','html','baseUrl','brand','brandUrl','slug','donor'];
 const PROVENANCE_WARNINGS=['LANGUAGE_DEFAULTED','GEO_UNSPECIFIED','FILE_REGION_NOT_DETECTED'];
@@ -81,9 +82,18 @@ function rowLinks(row){
  }
  return links(result);
 }
-function validateDefaults(value={}){
+function cardCountValue(value){
+ if(typeof value==='string'&&/^\d{1,2}$/.test(value.trim()))value=Number(value);
+ if(!Number.isSafeInteger(value)||value<1||value>20)fail('Кількість карток має бути цілим числом від 1 до 20.');
+ return value;
+}
+function validateDefaults(value={},type){
  fields(value,DEFAULT_KEYS);
  if(value.detectFileRegions!==undefined&&typeof value.detectFileRegions!=='boolean')fail('Автовизначення регіонів файлів має бути ввімкнено або вимкнено.');
+ if(value.cardCount!==undefined){
+  if(type!=='ai')fail('Кількість карток доступна лише для AI-проєкту.');
+  cardCountValue(value.cardCount);
+ }
  return value;
 }
 function normalizeData(type,row,index,defaults){
@@ -92,7 +102,7 @@ function normalizeData(type,row,index,defaults){
  const key=keyOf(row,index),title=string(row.title??'',500,{optional:true,multiline:true}).trim().replace(/\s+/g,' ');
  const rawLanguage=row.language||row.editorial?.language||defaults.language||'en';
  const language=type==='html'?normalizeHtmlLanguage(rawLanguage):String(rawLanguage).trim().toLowerCase();
- if(type==='html'?!language:!Object.hasOwn(EDITORIAL_LANGUAGES,language))fail(type==='html'?'Для HTML укажіть код мови, наприклад hu, pl або en-NZ.':'Мова має бути en, es, pl, de або fr.');
+ if(type==='html'?!language:!Object.hasOwn(EDITORIAL_LANGUAGES,language))fail(type==='html'?'Для HTML укажіть код мови, наприклад hu, pl або en-NZ.':'Укажіть підтримуваний код мови AI-генерації.');
  if(row.editorial?.language!==undefined&&row.editorial.language!==language)fail('Мова рядка й редакційного завдання має збігатися.');
  if(row.siteSelection!==undefined)fields(row.siteSelection,['minDr','minTraffic','geo']);
  const rawGeo=inherited(row.geo,row.siteSelection?.geo,defaults.geo)??'';
@@ -128,9 +138,15 @@ function normalizeData(type,row,index,defaults){
   try{editorial=normalizeEditorial({format:row.format||row.editorial?.format||defaults.format||'article',topic:row.topic||row.editorial?.topic||defaults.topic||'casino',customTopic:row.customTopic??row.editorial?.customTopic??defaults.customTopic??'',language});}
   catch{fail('Перевірте формат і тему; для власної теми вкажіть текст до 500 символів.');}
   if(row.editorial!==undefined)fields(row.editorial,['format','topic','customTopic','language']);
-  return {...common,links:rowLinks(row),editorial};
+  const pairs=rowLinks(row),count=inherited(row.cardCount,defaults.cardCount);
+  let requestedLinks=pairs;
+  if(count!==undefined){
+   const cardCount=cardCountValue(count);
+   try{requestedLinks=expandGenerationLinks(pairs,cardCount);}catch(error){fail(error.message);}
+  }
+  return {...common,links:requestedLinks,editorial};
  }
- if(['links','url','anchor','editorial','format','topic','customTopic',...Array.from({length:19},(_,i)=>['url'+(i+2),'anchor'+(i+2)]).flat()].some(name=>row[name]!==undefined))fail('У HTML-проєкт не можна імпортувати AI-завдання й пари посилань.');
+ if(['links','url','anchor','editorial','format','topic','customTopic','cardCount',...Array.from({length:19},(_,i)=>['url'+(i+2),'anchor'+(i+2)]).flat()].some(name=>row[name]!==undefined))fail('У HTML-проєкт не можна імпортувати AI-завдання й пари посилань.');
  string(row.html,MAX_HTML,{multiline:true});
  if(Buffer.byteLength(row.html,'utf8')>MAX_HTML)fail(messages.IMPORT_LIMIT);
  if(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(row.html))fail('HTML має бути в кодуванні UTF-8.');
@@ -147,11 +163,16 @@ function sourceFilename(value,tableOnly=false){
  return name;
 }
 function provenanceSource(value){
- fields(value,['kind','file','row','spreadsheetId','driveId','gid','range']);
+ fields(value,['kind','file','row','spreadsheetId','driveId','gid','range','tableFile','sheet']);
  if(!['items','table','files','google-sheets','google-drive'].includes(value.kind))fail();
  const source={kind:value.kind};
  if(value.file!==undefined)source.file=sourceFilename(value.file);
+ if(value.tableFile!==undefined)source.tableFile=sourceFilename(value.tableFile,true);
  if(value.row!==undefined){if(!Number.isSafeInteger(value.row)||value.row<1||value.row>10000000)fail();source.row=value.row;}
+ if(value.sheet!==undefined){
+  if(!Number.isSafeInteger(value.sheet)||value.sheet<0||value.sheet>=1000||!/\.xlsx$/i.test(source.tableFile??source.file??''))fail();
+  source.sheet=value.sheet;
+ }
  for(const key of ['spreadsheetId','driveId'])if(value[key]!==undefined){if(typeof value[key]!=='string'||! /^[a-zA-Z0-9_-]{1,200}$/.test(value[key])||/^(?:sk-|bearer[-_])|(?:private[-_]?key|access[-_]?token|refresh[-_]?token)/i.test(value[key]))fail();source[key]=value[key];}
  if(value.gid!==undefined){if(!Number.isSafeInteger(value.gid)||value.gid<0||value.gid>9999999999)fail();source.gid=value.gid;}
  // Sheet names may contain arbitrary private text. Coordinates plus the safe
@@ -205,7 +226,7 @@ function normalizeRow(type,row,index,defaults,context={}){
 /** Pure validation, used again when accepting a preview for durable import. */
 export function normalizeImportItems(type,items,{defaults={}}={}){
  if(!['ai','html'].includes(type))fail('Виберіть тип проєкту: AI або HTML.');
- validateDefaults(defaults);
+ validateDefaults(defaults,type);
  if(!Array.isArray(items)||!items.length)fail('У джерелі немає рядків для імпорту.');
  if(items.length>MAX_ITEMS)fail(messages.IMPORT_LIMIT);
  const keys=new Set();let bytes=0;
@@ -224,7 +245,7 @@ function delimited(text){
  try{return projectTable.read(text,{maxRows:MAX_ITEMS+2,onLimit:()=>fail(messages.IMPORT_LIMIT)});}
  catch(error){if(error.code==='IMPORT_VALIDATION')throw error;fail(error.message);}
 }
-const HEADERS=Object.fromEntries(['id','key','title','url','anchor','language','geo','minDr','minTraffic','format','topic','customTopic','file','links','html','baseUrl','brand','brandUrl','chromeMode','slug','donor','placementUrl'].map(key=>[key.toLowerCase(),key]));
+const HEADERS=Object.fromEntries(['id','key','title','url','anchor','language','geo','minDr','minTraffic','format','topic','customTopic','file','links','html','baseUrl','brand','brandUrl','chromeMode','slug','donor','placementUrl','cardCount'].map(key=>[key.toLowerCase(),key]));
 function tableRows(matrix,mapping){
  if(!Array.isArray(matrix)||!matrix.length||matrix.length>MAX_ITEMS+2)fail(messages.IMPORT_LIMIT);
  if(!Array.isArray(matrix[0]))fail();
@@ -245,7 +266,7 @@ function tableRows(matrix,mapping){
   if(cells.every(value=>value===null||String(value).trim()===''))continue;
   if(mapping&&cells.some((value,column)=>value!=null&&String(value).trim()&&!String(matrix[0][column]??'').trim()))fail('У таблиці є дані без заголовка колонки.');
   const data={};headers.forEach((key,column)=>{const raw=cells[column];if(key&&raw!==undefined&&raw!==null&&raw!=='')data[key]=raw;});
-  if(!Object.keys(data).length)continue;
+  if(!Object.values(data).some(value=>String(value).trim()))continue;
   rows.push({row:index+1,data});
  }
  if(rows.length>MAX_ITEMS)fail(messages.IMPORT_LIMIT);
@@ -369,26 +390,45 @@ export function createProjectImporter({getAccount=()=>null,getAccessToken,transp
   const root='https://www.googleapis.com/drive/v3/files',headers={authorization:'Bearer '+token,accept:'application/json'};
   const fields='id,name,mimeType,size,trashed';
   const metadata=await json(root+'/'+encodeURIComponent(reference.id)+'?fields='+encodeURIComponent(fields)+'&supportsAllDrives=true',{headers,signal});
-  let files=[];
+  const isHtml=file=>plain(file)&&['text/html','application/xhtml+xml'].includes(file.mimeType)&&typeof file.name==='string'&&/\.html?$/i.test(file.name);
+  const validEntry=file=>plain(file)&&typeof file.id==='string'&&/^[\w-]{1,200}$/.test(file.id)&&file.trashed!==true;
+  const segment=name=>typeof name==='string'&&!!name&&name.length<=255&&!/[\\/:\u0000-\u001f\u007f]/.test(name)&&name!=='.'&&name!=='..';
+  if(!validEntry(metadata)||metadata.id!==reference.id)fail(messages.GOOGLE_RESPONSE_INVALID,'GOOGLE_RESPONSE_INVALID');
+  const files=[];
   if(metadata?.mimeType===FOLDER){
-   let pageToken='';const seen=new Set();
-   do{
-    const query=new URLSearchParams({q:"'"+reference.id+"' in parents and trashed = false and mimeType != '"+FOLDER+"'",pageSize:'1000',fields:'nextPageToken,incompleteSearch,files('+fields+')',supportsAllDrives:'true',includeItemsFromAllDrives:'true'});
-    if(pageToken)query.set('pageToken',pageToken);
-    const page=await json(root+'?'+query.toString(),{headers,signal});
-    if(!plain(page)||!Array.isArray(page.files)||page.files.length>1000||page.incompleteSearch)fail(messages.GOOGLE_RESPONSE_INVALID,'GOOGLE_RESPONSE_INVALID');
-    files.push(...page.files);if(files.length>MAX_ITEMS)fail(messages.IMPORT_LIMIT);
-    pageToken=page.nextPageToken??'';
-    if(typeof pageToken!=='string'||pageToken.length>4000||pageToken&&seen.has(pageToken)||seen.size>100)fail('Google Drive повернув повторювану або незавершену сторінку списку.');
-    if(pageToken)seen.add(pageToken);
-   }while(pageToken);
-  }else files=[metadata];
+   const folders=[{id:reference.id,path:'',depth:0}],ids=new Set([reference.id]);
+   let scanned=0,pages=0;
+   for(const folder of folders){
+    let pageToken='';const seen=new Set();
+    do{
+     if(++pages>100)fail(messages.IMPORT_LIMIT);
+     const query=new URLSearchParams({q:"'"+folder.id+"' in parents and trashed = false",pageSize:'1000',fields:'nextPageToken,incompleteSearch,files('+fields+')',supportsAllDrives:'true',includeItemsFromAllDrives:'true'});
+     if(pageToken)query.set('pageToken',pageToken);
+     const page=await json(root+'?'+query.toString(),{headers,signal});
+     if(!plain(page)||!Array.isArray(page.files)||page.files.length>1000||page.incompleteSearch)fail(messages.GOOGLE_RESPONSE_INVALID,'GOOGLE_RESPONSE_INVALID');
+     scanned+=page.files.length;if(scanned>MAX_ITEMS)fail(messages.IMPORT_LIMIT);
+     for(const entry of page.files){
+      if(!isHtml(entry)&&entry?.mimeType!==FOLDER)continue;
+      if(!validEntry(entry)||!segment(entry.name))fail(messages.GOOGLE_RESPONSE_INVALID,'GOOGLE_RESPONSE_INVALID');
+      if(ids.has(entry.id))fail('Google Drive повернув повторюваний файл або теку.');ids.add(entry.id);
+      const path=folder.path+entry.name;
+      if(path.length>1024)fail(messages.IMPORT_LIMIT);
+      if(entry.mimeType===FOLDER){
+       if(folder.depth>=8)fail('Вкладеність тек Google Drive перевищує 8 рівнів.');
+       folders.push({id:entry.id,path:path+'/',depth:folder.depth+1});
+      }else files.push({...entry,path});
+     }
+     pageToken=page.nextPageToken??'';
+     if(typeof pageToken!=='string'||pageToken.length>4000||pageToken&&seen.has(pageToken))fail('Google Drive повернув повторювану або незавершену сторінку списку.');
+     if(pageToken)seen.add(pageToken);
+    }while(pageToken);
+   }
+  }else files.push(metadata);
   if(!files.length)fail('У теці Google Drive немає HTML-файлів.');
-  const ids=new Set();let total=0;
+  let total=0;
   // Validate the entire list before downloading any media.
   for(const file of files){
-   if(!plain(file)||typeof file.id!=='string'||!/^[\w-]{1,200}$/.test(file.id)||typeof file.name!=='string'||!file.name||file.name.length>255||file.trashed||!['text/html','application/xhtml+xml'].includes(file.mimeType)||!/\.html?$/i.test(file.name))fail('Google Drive: дозволено лише HTML-файли; ярлики та інші типи не підтримуються.');
-   if(ids.has(file.id))fail('Google Drive повернув повторюваний файл.');ids.add(file.id);
+   if(!isHtml(file)||!segment(file.name))fail('Google Drive: дозволено лише HTML-файли; ярлики та інші типи не підтримуються.');
    if(file.size!==undefined&&(!/^\d+$/.test(String(file.size))||!Number.isSafeInteger(Number(file.size))||Number(file.size)>MAX_HTML))fail(messages.IMPORT_LIMIT);
    total+=Number(file.size||0);if(total>MAX_TOTAL)fail(messages.IMPORT_LIMIT);
   }
@@ -401,7 +441,7 @@ export function createProjectImporter({getAccount=()=>null,getAccessToken,transp
    const bytes=Buffer.byteLength(html,'utf8');total+=bytes;
    if(bytes>MAX_HTML||total>MAX_TOTAL)fail(messages.IMPORT_LIMIT);
    if(!response.body&&html.includes('\uFFFD'))fail('HTML має бути в кодуванні UTF-8.');
-   result.push({id:file.id,name:file.name,html});
+   result.push({id:file.id,name:file.name,html,...(file.path?{path:file.path}:{})});
   }
   return result;
  }
@@ -409,9 +449,9 @@ export function createProjectImporter({getAccount=()=>null,getAccessToken,transp
   let source={kind:'items'};
   try{
    if(signal?.aborted)fail(messages.GOOGLE_READ_ABORTED,'GOOGLE_READ_ABORTED');
-   fields(body,['type','text','spreadsheetUrl','range','driveUrl','files','defaults','items','sourceFile','sourceRows','columnMapping']);
+   fields(body,['type','text','spreadsheetUrl','range','driveUrl','files','defaults','items','sourceFile','sourceRows','sourceLocations','columnMapping']);
    if(!['ai','html'].includes(body.type))fail('Виберіть тип проєкту: AI або HTML.');
-   const defaults=validateDefaults(body.defaults??{}),hasText=typeof body.text==='string'&&!!body.text.trim(),hasItems=body.items!==undefined,hasSheet=!empty(body.spreadsheetUrl),hasDrive=!empty(body.driveUrl),hasFiles=body.files!==undefined;
+   const defaults=validateDefaults(body.defaults??{},body.type),hasText=typeof body.text==='string'&&!!body.text.trim(),hasItems=body.items!==undefined,hasSheet=!empty(body.spreadsheetUrl),hasDrive=!empty(body.driveUrl),hasFiles=body.files!==undefined;
    const sourceFile=body.sourceFile===undefined?undefined:sourceFilename(body.sourceFile,true);if(sourceFile!==undefined&&!hasText)fail();
    if(body.text!==undefined&&typeof body.text!=='string'||body.range!==undefined&&!hasSheet)fail();
    if(Number(hasText)+Number(hasItems)+Number(hasSheet)>1||hasDrive&&hasFiles||body.type==='ai'&&(hasDrive||hasFiles)||hasItems&&(hasDrive||hasFiles))fail('Виберіть одне джерело таблиці й одне джерело HTML-файлів.');
@@ -423,6 +463,16 @@ export function createProjectImporter({getAccount=()=>null,getAccessToken,transp
     if(!sourceFile||!/\.(?:txt|md|docx)$/i.test(sourceFile)||!Array.isArray(body.sourceRows)||body.sourceRows.length!==rows?.length||
       body.sourceRows.some((row,index)=>!Number.isSafeInteger(row)||row<1||row>10000000||index>0&&row<=body.sourceRows[index-1]))fail('Некоректні номери рядків вихідного завдання.');
     rows=rows.map((entry,index)=>({...entry,row:body.sourceRows[index]}));
+   }
+   if(body.sourceLocations!==undefined){
+    if(!sourceFile||body.sourceRows!==undefined||!Array.isArray(body.sourceLocations)||body.sourceLocations.length!==rows?.length||body.sourceLocations.length>MAX_ITEMS)fail('Некоректні координати вихідної таблиці.');
+    rows=rows.map((entry,index)=>{
+     const location=fields(body.sourceLocations[index],['file','row','sheet']);
+     const file=sourceFilename(location.file,true);
+     if(!Number.isSafeInteger(location.row)||location.row<1||location.row>10000000)fail('Некоректний номер рядка вихідної таблиці.');
+     const {sheet}=provenanceSource({...location,file,kind:'table'});
+     return {...entry,row:location.row,tableLocation:{file,...(sheet!==undefined?{sheet}:{})}};
+    });
    }
    if(hasText)source={kind:'table',...(sourceFile?{file:sourceFile}:{})};
    let token;if(hasSheet||hasDrive)token=await accessToken(signal);
@@ -440,7 +490,9 @@ export function createProjectImporter({getAccount=()=>null,getAccessToken,transp
     try{
      if(plain(entry.data))key=keyOf(entry.data,index);
      const {fileCount,...sourceReference}=source;
-     const item=normalizeRow(body.type,entry.data,index,defaults,{source:{...sourceReference,...entry.provenanceSource,row:entry.row},detected:entry.detected,regionDetectionMissing:entry.regionDetectionMissing});
+     const tableLocation=entry.tableLocation;
+     const coordinates=tableLocation?{[entry.provenanceSource?'tableFile':'file']:tableLocation.file,...(tableLocation.sheet!==undefined?{sheet:tableLocation.sheet}:{})}:{};
+     const item=normalizeRow(body.type,entry.data,index,defaults,{source:{...sourceReference,...entry.provenanceSource,...coordinates,row:entry.row},detected:entry.detected,regionDetectionMissing:entry.regionDetectionMissing});
      if(seen.has(item.key))fail('ID рядків мають бути унікальними.');seen.add(item.key);
      total+=Buffer.byteLength(JSON.stringify(item),'utf8');if(total>MAX_TOTAL)fail(messages.IMPORT_LIMIT);
      items.push(item);

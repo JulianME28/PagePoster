@@ -100,7 +100,7 @@ export function createWordPressUI({chromium,executablePath,headless=false,transp
   context.on('page',other=>{if(other!==page)void other.close().catch(()=>{});});
   page.on('dialog',dialog=>dialog.type()==='beforeunload'?dialog.accept():dialog.dismiss());
   const disconnected=()=>{closed=true;accountController.abort();void cleanup().catch(()=>{}).then(()=>{if(manualEditor&&sessions.get(id)?.page===page)sessions.delete(id);});};page.on('close',disconnected);browser.on('disconnected',disconnected);
-  cleanup=()=>cleanupPromise||(cleanupPromise=(async()=>{closed=true;accountEpoch++;accountController.abort();assets.clear();draftCheckpoint=null;page.off('close',disconnected);browser.off('disconnected',disconnected);await context.close().catch(()=>{});await staticRouting?.close();await networkSession?.close();})());
+  cleanup=()=>cleanupPromise||(cleanupPromise=(async()=>{closed=true;accountEpoch++;accountController.abort();assets.clear();draftCheckpoint=null;page.off('close',disconnected);browser.off('disconnected',disconnected);try{await context.close();}catch(error){if(browser.isConnected()&&browser.contexts().includes(context))throw error;}await staticRouting?.close();await networkSession?.close();})().catch(error=>{cleanupPromise=null;throw error;}));
   const assertOpen=()=>{if(closed||page.isClosed()||!browser.isConnected())fail('BROWSER_CLOSED');};
   const same=value=>{if(!base)fail('BROWSER_SITE_REQUIRED');const url=validatePublicUrl(value);if(url.origin!==base.origin)fail('BROWSER_ORIGIN_BLOCKED');return url;};
   const address=value=>new URL(value,base).href;
@@ -368,14 +368,14 @@ export function createWordPressUI({chromium,executablePath,headless=false,transp
   }
   async function editorState(){
    await waitForState(()=>{if(document.querySelector('form#post #content'))return Number(document.querySelector('form#post [name=post_ID]')?.value)>0&&!!document.querySelector('#original_post_status,[name=original_post_status]')?.value;const editor=window.wp?.data?.select('core/editor');return Number(editor?.getCurrentPostId?.())>0&&typeof editor?.getCurrentPost?.()?.status==='string';},{timeoutMs:120000,code:'NATIVE_EDITOR_UNAVAILABLE'});
-   if(await page.locator('form#post #content').count())return page.locator('form#post').evaluate(form=>({kind:'classic',postId:Number(form.querySelector('[name=post_ID]')?.value),title:form.querySelector('#title')?.value,content:form.querySelector('#content')?.value,status:document.querySelector('#original_post_status')?.value||document.querySelector('[name=original_post_status]')?.value,url:document.querySelector('#sample-permalink')?.href||document.querySelector('#wp-admin-bar-view a')?.href||''}));
-   return page.evaluate(()=>{const s=wp.data.select('core/editor'),p=s.getCurrentPost();return {kind:'block',postId:Number(s.getCurrentPostId()),title:s.getEditedPostAttribute('title'),content:s.getEditedPostContent(),status:p.status,url:p.link||s.getPermalink?.()||''};});
+   if(await page.locator('form#post #content').count())return page.locator('form#post').evaluate(form=>({kind:'classic',postType:form.querySelector('[name=post_type]')?.value,postId:Number(form.querySelector('[name=post_ID]')?.value),title:form.querySelector('#title')?.value,content:form.querySelector('#content')?.value,status:document.querySelector('#original_post_status')?.value||document.querySelector('[name=original_post_status]')?.value,url:document.querySelector('#sample-permalink')?.href||document.querySelector('#wp-admin-bar-view a')?.href||''}));
+   return page.evaluate(()=>{const s=wp.data.select('core/editor'),p=s.getCurrentPost();return {kind:'block',postType:p.type,postId:Number(s.getCurrentPostId()),title:s.getEditedPostAttribute('title'),content:s.getEditedPostContent(),status:p.status,url:p.link||s.getPermalink?.()||''};});
   }
   async function inspect(input){return observeNativePhase(operationObserve,'reconcile',()=>inspectEditor(input));}
-  async function inspectEditor({saved,title,html,slug,readMode='inspect'}){
+  async function inspectEditor({saved,title,html,slug,readMode='inspect',requirePage=false}){
    if(!Number.isSafeInteger(saved?.postId)||saved.postId<1)fail('NATIVE_RESULT_UNCERTAIN',true);
    expected={postId:saved.postId,title,html};mode=readMode;await visit(address('wp-admin/post.php?post='+saved.postId+'&action=edit'),false,'commit');
-   const actual=await editorState();if(actual.postId!==saved.postId)fail('NATIVE_RESULT_UNCERTAIN',true);
+   const actual=await editorState();if(requirePage&&actual.postType!=='page')fail('NATIVE_TRASH_UNCERTAIN',true);if(actual.postId!==saved.postId)fail('NATIVE_RESULT_UNCERTAIN',true);
    if(actual.status!=='publish'){if(['auto-draft','draft'].includes(actual.status))fail('NATIVE_NOT_PUBLISHED');fail('NATIVE_RESULT_UNCERTAIN',true);}
    if(plain(actual.title)!==plain(title)||!sameContent(actual.content,html))fail('NATIVE_CONTENT_CHANGED',true);
    const url=same(actual.url);if(url.pathname.startsWith(new URL('wp-admin/',base).pathname))fail('NATIVE_RESULT_UNCERTAIN',true);
@@ -564,6 +564,13 @@ export function createWordPressUI({chromium,executablePath,headless=false,transp
    },
     inspectPublished:inspect,
     updatePublished,reconcileUpdate,
+   async inspectOwnedPublished({saved,title,html}){
+    dispatch=null;dispatchError=null;armedUrl=null;
+    if(saved?.phase!=='published'||typeof title!=='string'||typeof html!=='string')fail('NATIVE_TRASH_UNCERTAIN',true);
+    const actual=await inspect({saved,title,html,requirePage:true});
+    if(navigationError||navigationStatus>=400||actual.url!==saved.url||actual.title!==title)fail('NATIVE_TRASH_UNCERTAIN',true);
+    return {postId:actual.postId,status:'publish',url:actual.url};
+   },
    async inspectOwnedTrash({saved,title,html}){
     // This path never arms an action URL or creates a dispatch capability.
     // Listing proof is bound to the saved ID, title, row status and restore ID.
@@ -582,8 +589,13 @@ export function createWordPressUI({chromium,executablePath,headless=false,transp
      if(cleanupState?.phase==='dispatching'||cleanupState?.phase==='trashed'){
       if(!await trashProof(title))fail('NATIVE_TRASH_UNCERTAIN',true);await checkpoint({postId:saved.postId,phase:'trashed'});return {postId:saved.postId,status:'trash'};
      }
-     const actual=await inspect({saved,title,html,readMode:'trash'});if(actual.url!==publishedUrl.href)fail('NATIVE_CONTENT_CHANGED',true);
+     const actual=await inspect({saved,title,html,readMode:'trash',requirePage:true});if(actual.url!==publishedUrl.href||actual.title!==title||actual.status!=='publish')fail('NATIVE_CONTENT_CHANGED',true);
      const row=await trashListing(title);if(await row.count()!==1)fail('NATIVE_TRASH_UNAVAILABLE');
+     const matches=await row.evaluate((node,{postId,title})=>{
+      const fields=node.querySelectorAll('[id="inline_'+postId+'"]');
+      return node.classList.contains('type-page')&&node.classList.contains('status-publish')&&fields.length===1&&fields[0].querySelector('.post_title')?.textContent===title&&fields[0].querySelector('._status')?.textContent==='publish';
+     },{postId:saved.postId,title});
+     if(!matches)fail('NATIVE_CONTENT_CHANGED',true);
      const links=row.locator('.row-actions .trash a[href]');if(await links.count()!==1)fail('NATIVE_TRASH_UNAVAILABLE');
      const chosen=links.first(),target=coreTrashUrl(await chosen.getAttribute('href'),'trash');if(!target)fail('NATIVE_TRASH_UNAVAILABLE');
      dispatch={operation:'trash',sent:false,finished:false,checkpoint,beforeSend};armedUrl=target.href;navigationError=null;navigationStatus=null;redirects=0;
@@ -664,7 +676,7 @@ export function createWordPressUI({chromium,executablePath,headless=false,transp
    async resume(){assertOpen();await guard();return true;},
    close:cleanup
   };
-  for(const name of ['login','ensureCleanLinks','publishPage','inspectPublished','inspectOwnedTrash','trashPublished','updatePublished','reconcileUpdate']){
+  for(const name of ['login','ensureCleanLinks','publishPage','inspectPublished','inspectOwnedPublished','inspectOwnedTrash','trashPublished','updatePublished','reconcileUpdate']){
    const action=session[name];
    session[name]=async(...args)=>{
     const prior=operationObserve;

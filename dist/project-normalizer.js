@@ -15,9 +15,10 @@
     'dr': 'minDr', 'мін. dr': 'minDr', 'трафік': 'minTraffic', 'трафик': 'minTraffic', 'traffic': 'minTraffic',
     'донор':'donor', 'donor domain':'donor', 'сайт розміщення':'donor', 'домен розміщення':'donor',
     'слаг':'slug', 'слагг':'slug', 'url slug':'slug', 'page slug':'slug', 'post_name':'slug',
-    'publication url':'placementUrl', 'url публікації':'placementUrl', 'адреса публікації':'placementUrl', 'url для публікації':'placementUrl'
+    'publication url':'placementUrl', 'url публікації':'placementUrl', 'адреса публікації':'placementUrl', 'url для публікації':'placementUrl',
+    'кількість карток':'cardCount', 'cards':'cardCount', 'offer count':'cardCount'
   }));
-  const knownColumn = /^(?:id|key|title|url(?:[2-9]|1\d|20)?|anchor(?:[2-9]|1\d|20)?|language|geo|mindr|mintraffic|format|topic|customtopic|file|links|html|baseurl|brand|brandurl|chromemode|slug|donor|placementurl)$/i;
+  const knownColumn = /^(?:id|key|title|url(?:[2-9]|1\d|20)?|anchor(?:[2-9]|1\d|20)?|language|geo|mindr|mintraffic|format|topic|customtopic|file|links|html|baseurl|brand|brandurl|chromemode|slug|donor|placementurl|cardcount)$/i;
   const privateHeader = /password|passwd|\bpwd\b|\blogin\b|username|api[\s_-]*key|credential|token|secret|парол|лог[іи]н|hasło|contraseña|passwort|mot de passe/iu;
   const briefFields = new Map(Object.entries({
     page:'page', 'сторінка':'page', 'страница':'page',
@@ -25,7 +26,7 @@
     url:'url', anchor:'anchor', language:'language', geo:'geo', file:'file',
     mindr:'minDr', mintraffic:'minTraffic', format:'format', 'формат':'format',
     topic:'topic', 'тема':'topic', customtopic:'customTopic', 'власна тема':'customTopic',
-    baseurl:'baseUrl', 'адреса ресурсів':'baseUrl', slug:'slug', donor:'donor', placementurl:'placementUrl'
+    baseurl:'baseUrl', 'адреса ресурсів':'baseUrl', slug:'slug', donor:'donor', placementurl:'placementUrl', cardcount:'cardCount'
   }));
 
   function decode(bytes) {
@@ -44,15 +45,37 @@
     return aliases.get(name) || name;
   }
 
-  async function tablePayload(text, sourceFile, sheet, optional, {mapColumns,hasHtml:packagedHtml=false}={}) {
+  const hasAiColumns = headers => headers.includes('links') || headers.some(name => urlColumn.test(name) && headers.includes('anchor' + name.slice(3)));
+  const hasHtmlColumns = headers => headers.includes('html') || headers.includes('file');
+  const hasPlacementColumns = headers => headers.some(name=>['slug','donor','placementurl'].includes(name.toLowerCase()));
+  const hasMappedContent = (row,headers) => row.some((value,index)=>headers[index]&&value.trim());
+  const likelyTaskName = /(?:^|\/)(?:tasks?|brief|placement|publication-map|manifest|instructions?|інструкц[\p{L}]*)(?:[._ -]|$)/iu;
+  const notesName = /(?:^|\/)(?:notes?|comments?|примітк[аи]|коментарі?)(?:[._ -]|$)/iu;
+  const placementShapeError = 'В архіві є HTML і таблиця. Для зіставлення вкажіть колонку «file» з іменами HTML-файлів.';
+
+  async function tablePayload(text, sourceFile, sheet, optional, {mapColumns,hasHtml:packagedHtml=false,allowUnknown=false,sourceAssets,locations}={}) {
     const parser = root.PagePosterProjectTable;
     // Archive TXT/MD files may contain licenses and notes. Look for a
     // table header before interpreting their prose as quoted CSV cells.
-    const records = parser.read(text, {headerOnly: optional});
+    let records;
+    try {
+      records = parser.read(text, {headerOnly: optional});
+    } catch (error) {
+      if (optional && !likelyTaskName.test(sourceFile) && textBriefExtension.test(sourceFile)) return null;
+      throw error;
+    }
     const labels = (records[0] || []).map(value => value.trim());
     let headers = labels.map(header);
-    if (optional && !headers.some(value => knownColumn.test(value)) && (!mapColumns || labels.length < 2)) return null;
+    const knownShape = hasHtmlColumns(headers) || hasAiColumns(headers);
+    const placement = packagedHtml && hasPlacementColumns(headers);
+    const namedTask = labels.length >= 2 && likelyTaskName.test(sourceFile) && !textBriefExtension.test(sourceFile);
+    const couldReferenceAssets = labels.length >= 2 && sourceAssets?.size && /\.html?(?:["\s,;\t]|$)/i.test(text);
+    const tryUnclassified = !!mapColumns && labels.length >= 2 && (allowUnknown || likelyTaskName.test(sourceFile));
+    if (optional && !knownShape && !placement && !namedTask && !couldReferenceAssets && !tryUnclassified) return null;
     const matrix = optional ? parser.read(text) : records;
+    const referencesAssets = couldReferenceAssets && matrix.slice(1).some(row=>row.some(value=>sourceAssets.has(value.trim())));
+    const probableTask = placement || namedTask || referencesAssets;
+    if (optional && !knownShape && (!probableTask && !tryUnclassified || !matrix.slice(1).some(row=>row.some(value=>value.trim())))) return null;
     let columnMapping;
     if(mapColumns && headers.some(value=>!knownColumn.test(value))){
       const inventory = packagedHtml && headers.includes('file') && /(?:^|\/)(?:publication-map|manifest)\./i.test(sourceFile);
@@ -63,18 +86,22 @@
       });
       const proposal = headers.some((value,index)=>!knownColumn.test(value)&&safeLabels[index])?await mapColumns(safeLabels,packagedHtml):headers.map(()=> '');
       if(!Array.isArray(proposal)||proposal.length!==headers.length||proposal.some(field=>typeof field!=='string'||field&&!knownColumn.test(field)))throw Error('API не підтвердив структуру таблиці.');
-      if(proposal.some((field,index)=>!field&&safeLabels[index]&&!knownColumn.test(headers[index])&&!/^(?:notes?|comments?|примітк[аи]|коментарі?|заметки?)$/iu.test(safeLabels[index])))throw Error('API не визначив призначення всіх колонок. Перевірте заголовки таблиці.');
       columnMapping=headers.map((value,index)=>knownColumn.test(value)?value:safeLabels[index]?proposal[index]:'');
+      if (optional && !probableTask && !hasHtmlColumns(columnMapping) && !hasAiColumns(columnMapping)) return null;
+      if(proposal.some((field,index)=>!field&&safeLabels[index]&&!knownColumn.test(headers[index])&&!/^(?:notes?|comments?|примітк[аи]|коментарі?|заметки?)$/iu.test(safeLabels[index])))throw Error('API не визначив призначення всіх колонок. Перевірте заголовки таблиці.');
       if(new Set(columnMapping.filter(Boolean).map(value=>value.toLowerCase())).size!==columnMapping.filter(Boolean).length)throw Error('У таблиці кілька колонок з однаковим призначенням.');
       headers=columnMapping;
     }
-    const hasHtml = headers.includes('html') || headers.includes('file');
-    const hasAi = headers.includes('links') || headers.some(name => urlColumn.test(name) && headers.includes('anchor' + name.slice(3)));
+    const hasHtml = hasHtmlColumns(headers);
+    const hasAi = hasAiColumns(headers);
     if (!hasHtml && !hasAi) {
-      if (optional) return null;
+      if (optional && !probableTask) return null;
+      if (packagedHtml) throw Error(placementShapeError);
       throw Error('У першому рядку таблиці потрібні колонки URL і анкор, HTML або ім’я файлу.');
     }
     if (hasHtml && hasAi) throw Error('Таблиця поєднує завдання для AI та готовий HTML. Розділіть їх на два проєкти.');
+    const sourceLocations = locations?.filter((_,index)=>hasMappedContent(matrix[index+1],headers));
+    if (locations && !sourceLocations.length) return null;
     return {
       type: hasHtml ? 'html' : 'ai',
       sourceFile: sourceFile.split('/').pop(),
@@ -82,6 +109,7 @@
       text: columnMapping||labels.every((label,index)=>label===headers[index]) ? text :
         [headers,...matrix.slice(1)].map(row=>row.map(quote).join(',')).join('\n'),
       ...(columnMapping?{columnMapping}:{}),
+      ...(sourceLocations?{sourceLocations}:{}),
       sheet
     };
   }
@@ -104,6 +132,60 @@
     return '';
   }).join('');
   const quote = value => '"' + value.replace(/"/g, '""') + '"';
+
+  function serializeTable(rows) {
+    const encoder = new TextEncoder();
+    let total = 0;
+    return rows.map(row => {
+      const line = row.map(quote).join(',');
+      total += encoder.encode(line).length + 1;
+      if (total > maxPackage) throw Error('Таблиця після читання перевищує 20 МБ.');
+      return line;
+    }).join('\n');
+  }
+
+  function mergeTables(tables) {
+    if (tables.length <= 1) return tables[0] || null;
+    const type = tables[0].type;
+    const fileMapped = tables[0].headers.includes('file');
+    if (tables.some(table => table.type !== type || table.headers.includes('file') !== fileMapped)) {
+      throw Error('Кілька таблиць містять несумісні завдання. Розділіть AI, вбудований HTML і зіставлення файлів.');
+    }
+    const headers = [...new Set(tables.flatMap(table => table.headers.filter(Boolean).map(name => name.toLowerCase() === 'id' ? 'key' : name.toLowerCase())))];
+    if (headers.length > 128) throw Error('Кілька таблиць містять понад 128 різних колонок.');
+    const rows = [], sourceLocations = [], seenRows = new Set(), seenKeys = new Set();
+    for (const table of tables) {
+      const names = table.headers.map(name => name.toLowerCase() === 'id' ? 'key' : name.toLowerCase());
+      const named = names.filter(Boolean);
+      if (new Set(named).size !== named.length) throw Error('Кілька колонок мають однакове призначення.');
+      const positions = headers.map(name => names.indexOf(name));
+      const [labels, ...records] = root.PagePosterProjectTable.read(table.text);
+      let rowIndex = 0;
+      for (const [index, row] of records.entries()) {
+        if (!row.some(value => value.trim())) continue;
+        if (row.length > names.length || row.some((value, column) => value.trim() && !names[column] && !table.columnMapping)) {
+          throw Error('Кількість клітинок не збігається із заголовками таблиці.');
+        }
+        if (table.columnMapping && row.some((value, column) => value.trim() && !labels[column]?.trim())) {
+          throw Error('У таблиці є дані без заголовка колонки.');
+        }
+        const values = positions.map(position => row[position] ?? '');
+        if (!values.some(value => value.trim())) continue;
+        const fingerprint = JSON.stringify(values);
+        const key = values[headers.indexOf('key')]?.trim();
+        if (seenRows.has(fingerprint) || key && seenKeys.has(key)) {
+          throw Error('Кілька таблиць містять повторюваний рядок або однаковий ID.');
+        }
+        seenRows.add(fingerprint);
+        if (key) seenKeys.add(key);
+        if (rows.length >= 1000) throw Error('Таблиця має містити до 1000 рядків даних.');
+        rows.push(values);
+        sourceLocations.push(table.sourceLocations?.[rowIndex] || {file:table.sourceFile,row:table.sourceRows?.[rowIndex] ?? index + 2});
+        rowIndex++;
+      }
+    }
+    return {type,headers,text:serializeTable([headers,...rows]),sourceFile:tables[0].sourceFile,sourceLocations};
+  }
 
   function briefField(line) {
     const plain = line.trim().replace(/^(?:#{1,6}|[-*+])\s+/, '');
@@ -178,54 +260,114 @@
     return path;
   }
 
-  async function readXlsx(bytes) {
-    const entries = await root.PagePosterHTMLPackage.unpackZip(bytes);
-    const files = new Map(entries.map(entry => [entry.name, entry]));
-    const book = xml(files, 'xl/workbook.xml', 'workbook');
-    const sheets = descendants(book, 'sheet').filter(sheet => !['hidden', 'veryHidden'].includes(sheet.getAttribute('state')));
-    if (sheets.length !== 1) throw Error('Для імпорту XLSX залиште один видимий аркуш із даними або збережіть потрібний аркуш у CSV.');
-    const sheet = sheets[0];
-    const id = Array.from(sheet.attributes).find(attribute => attribute.localName === 'id')?.value;
-    const relations = xml(files, 'xl/_rels/workbook.xml.rels', 'Relationships');
-    const matches = descendants(relations, 'Relationship').filter(relation => relation.getAttribute('Id') === id && relation.getAttribute('Type')?.endsWith('/worksheet') && relation.getAttribute('TargetMode') !== 'External');
-    if (matches.length !== 1) throw Error('Не вдалося визначити аркуш XLSX.');
-    const worksheet = xml(files, sheetPath(matches[0].getAttribute('Target')), 'worksheet');
-    const strings = files.has('xl/sharedStrings.xml') ? descendants(xml(files, 'xl/sharedStrings.xml', 'sst'), 'si').map(richText) : [];
-    const rows = [];
-    for (const row of descendants(worksheet, 'row')) {
-      const number = Number(row.getAttribute('r'));
-      if (!Number.isInteger(number) || number < 1 || number > 1001 || rows[number - 1]) throw Error('XLSX має містити до 1000 рядків даних після заголовка.');
-      const values = [];
+  const cacheFunctions = new Set('ABS AND AVERAGE CONCAT CONCATENATE COUNT COUNTA IF IFERROR INDEX LEFT LEN LOOKUP LOWER MATCH MAX MID MIN MOD NOT OR PROPER REPLACE RIGHT ROUND ROUNDDOWN ROUNDUP SUBSTITUTE SUM TEXT TEXTJOIN TRIM UPPER VALUE VLOOKUP XLOOKUP'.split(' '));
+
+  function readCell(cell, strings, externalLinks) {
+    const type = cell.getAttribute('t') || 'n';
+    const formulas = children(cell, 'f'), cached = children(cell, 'v');
+    const raw = cached[0]?.textContent ?? '';
+    if (type === 'e') throw Error('Замініть помилки та небезпечні формули Excel готовими значеннями перед імпортом.');
+    if (formulas.length) {
+      const formula = formulas[0], text = formula.textContent.replace(/"(?:[^"]|"")*"/g, '""');
+      // Inspect the whole call target so Unicode and qualified names cannot hide an unknown function.
+      const functions = [...text.matchAll(/([^\s+\-*/^&=<>%,;:(){}"]+)\s*\(/gu)].map(match=>match[1].toUpperCase().replace(/^_XLFN\./,''));
+      const scalar = type === 'str' || type === 'b' && /^[01]$/.test(raw) ||
+        type === 'n' && /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/i.test(raw) && Number.isFinite(Number(raw));
+      if (externalLinks || formulas.length !== 1 || cached.length !== 1 || cached[0].children.length || !scalar || !raw ||
+          !text.trim() || /[[\]|]/.test(text) ||
+          functions.some(name => !cacheFunctions.has(name)) || ![null,'normal'].includes(formula.getAttribute('t'))) {
+        throw Error('Замініть формули Excel без надійного збереженого значення готовими значеннями перед імпортом.');
+      }
+    }
+    if (type === 's' && (!/^\d+$/.test(raw) || strings[Number(raw)] === undefined)) throw Error('XLSX містить пошкоджену текстову клітинку.');
+    const inline = children(cell, 'is')[0];
+    return type === 's' ? strings[Number(raw)] : type === 'inlineStr' && inline ? richText(inline) : raw;
+  }
+
+  function worksheetTable(worksheet, strings, externalLinks, allowUnknown,options) {
+    const data = children(worksheet, 'sheetData');
+    if (data.length !== 1) throw Error('XLSX містить некоректний аркуш.');
+    const rowNumber = row => Number(row.getAttribute('r'));
+    const populated = children(data[0], 'row').filter(row => children(row,'c').some(cell =>
+      cell.children.length || cell.getAttribute('t') === 'e'
+    )).sort((a,b)=>rowNumber(a)-rowNumber(b));
+    const possibleHeaders = populated.slice(0,20);
+    const valuesByRow = possibleHeaders.map(row=>children(row,'c').map(cell => {
+        // A formula or Excel error cannot itself identify a project header.
+        if (children(cell,'f').length || cell.getAttribute('t') === 'e') return '';
+        try { return readCell(cell,strings,externalLinks).trim(); } catch { return ''; }
+    }));
+    const recognized = valuesByRow.findIndex(values => {
+      const names = values.map(header);
+      return hasAiColumns(names) || hasHtmlColumns(names) || options?.hasHtml && hasPlacementColumns(names);
+    });
+    const referencesAssets = options?.sourceAssets?.size && valuesByRow.slice(1).some(values=>values.some(value=>options.sourceAssets.has(value)));
+    const headerRow = recognized>=0 ? populated[recognized] : allowUnknown || referencesAssets ? populated[0] : null;
+    if (!headerRow) return null;
+    const projectRows = populated.slice(populated.indexOf(headerRow));
+    const rows = [], physicalRows = [], seen = new Set();
+    let headers;
+    for (const row of projectRows) {
+      const number = rowNumber(row);
+      if (!Number.isInteger(number) || number < 1 || number > 1048576 || seen.has(number) || seen.size >= 1001) {
+        throw Error('XLSX має містити до 1000 рядків даних після заголовка.');
+      }
+      seen.add(number);
+      const sparse = [];
       for (const cell of children(row, 'c')) {
         const address = /^([A-Z]{1,3})([1-9]\d*)$/.exec(cell.getAttribute('r') || '');
         const column = address ? Array.from(address[1]).reduce((result, letter) => result * 26 + letter.charCodeAt(0) - 64, 0) - 1 : -1;
-        if (column < 0 || column >= 128 || Number(address[2]) !== number || values[column] !== undefined) throw Error('XLSX містить некоректні адреси або понад 128 колонок.');
-        const type = cell.getAttribute('t') || 'n';
-        if (children(cell, 'f').length || type === 'e') throw Error('Замініть формули й помилки Excel готовими значеннями перед імпортом.');
-        const raw = children(cell, 'v')[0]?.textContent || '';
-        if (type === 's' && (!/^\d+$/.test(raw) || strings[Number(raw)] === undefined)) throw Error('XLSX містить пошкоджену текстову клітинку.');
-        const inline = children(cell, 'is')[0];
-        values[column] = type === 's' ? strings[Number(raw)] : type === 'inlineStr' && inline ? richText(inline) : raw;
+        if (column < 0 || column >= 128 || Number(address[2]) !== number || sparse[column] !== undefined) throw Error('XLSX містить некоректні адреси або понад 128 колонок.');
+        sparse[column] = readCell(cell,strings,externalLinks);
       }
-      rows[number - 1] = values;
+      const values = Array.from(sparse,value=>value ?? '');
+      if (!headers) {
+        headers=values;
+        rows.push(headers);
+        continue;
+      }
+      if (!values.some(value=>value.trim())) continue;
+      if (values.some((value,column)=>value.trim()&&!headers[column]?.trim())) throw Error('У XLSX є дані в колонках без заголовків.');
+      rows.push(Array.from({length:headers.length},(_,column)=>values[column] ?? ''));
+      physicalRows.push(number);
     }
-    const width = rows[0]?.length || 0;
-    if (!width) throw Error('Перша стрічка аркуша XLSX має містити заголовки.');
-    let total = 0;
-    const encoder = new TextEncoder();
-    const text = Array.from(rows, row => {
-      if (row?.slice(width).some(value => value !== '')) throw Error('У XLSX є дані в колонках без заголовків.');
-      return Array.from({length: width}, (_, column) => {
-        const cell = quote(row?.[column] || '');
-        total += encoder.encode(cell).length + 2;
-        if (total > maxPackage) throw Error('Таблиця після читання перевищує 20 МБ.');
-        return cell;
-      }).join(',');
-    }).join('\r\n');
-    return {text, sheet: sheet.getAttribute('name')};
+    return rows.length > 1 ? {text:serializeTable(rows),physicalRows} : null;
   }
 
-  async function readDocx(bytes,name) {
+  async function readXlsx(bytes, name, optional, options) {
+    const entries = await root.PagePosterHTMLPackage.unpackZip(bytes);
+    const files = new Map(entries.map(entry => [entry.name, entry]));
+    const book = xml(files, 'xl/workbook.xml', 'workbook');
+    const sheets = [...descendants(book,'sheet').entries()].filter(([,sheet])=>!['hidden','veryHidden'].includes(sheet.getAttribute('state')));
+    const relations = descendants(xml(files, 'xl/_rels/workbook.xml.rels', 'Relationships'),'Relationship');
+    const strings = files.has('xl/sharedStrings.xml') ? descendants(xml(files, 'xl/sharedStrings.xml', 'sst'), 'si').map(richText) : [];
+    const externalLinks = descendants(book,'externalReference').length > 0 || [...files.keys()].some(path=>/^xl\/externalLinks\//i.test(path));
+    const tables = [], visited = new Set();
+    for (const [index,sheet] of sheets) {
+      const id = Array.from(sheet.attributes).find(attribute => attribute.localName === 'id')?.value;
+      const matches = relations.filter(relation => relation.getAttribute('Id') === id);
+      if (matches.length !== 1 || matches[0].getAttribute('TargetMode') === 'External') throw Error('Не вдалося визначити аркуш XLSX.');
+      const kind = matches[0].getAttribute('Type') || '';
+      if (kind.endsWith('/chartsheet')) continue;
+      if (!kind.endsWith('/worksheet')) throw Error('Не вдалося визначити аркуш XLSX.');
+      const path = sheetPath(matches[0].getAttribute('Target'));
+      if (visited.has(path)) throw Error('У XLSX повторюється аркуш.');
+      visited.add(path);
+      const worksheet = xml(files,path,'worksheet');
+      const allowUnknown = sheets.length === 1 && (!optional || options?.allowUnknown || likelyTaskName.test(name)) && !!options?.mapColumns;
+      const raw = worksheetTable(worksheet,strings,externalLinks,allowUnknown,options);
+      if (!raw) continue;
+      const file = name.split('/').pop();
+      const locations = raw.physicalRows.map(row=>({file,sheet:index,row}));
+      const table = await tablePayload(raw.text,name,sheet.getAttribute('name'),true,{...options,allowUnknown,locations});
+      if (!table) continue;
+      tables.push(table);
+    }
+    if (!tables.length && !optional) throw Error('У видимих аркушах XLSX немає таблиці завдань з URL і анкорами, HTML або іменами файлів.');
+    return mergeTables(tables);
+  }
+
+  async function readDocx(bytes,name,optional) {
     const entries = await root.PagePosterHTMLPackage.unpackZip(bytes);
     const files = new Map(entries.map(entry => [entry.name, entry]));
     const document = xml(files, 'word/document.xml', 'document', 'DOCX');
@@ -234,6 +376,10 @@
     const wordChildren = (element, name) => children(element, name).filter(child => child.namespaceURI === ns);
     const body = wordChildren(document, 'body'), tables = document.getElementsByTagNameNS(ns, 'tbl');
     const shapeError = 'Залиште в DOCX одну звичайну таблицю із заголовками й даними або почніть ТЗ з «Сторінка: назва».';
+    if (optional && body.length === 1 && !tables.length) {
+      const first = wordChildren(body[0],'p').map(node=>descendants(node,'t').map(text=>text.textContent).join('')).find(text=>text.trim());
+      if (!first || briefField(first).key !== 'page') return null;
+    }
     if (body.length !== 1 || tables.length > 1 || tables.length === 1 && tables[0].parentNode !== body[0]) throw Error(shapeError);
     const content = tables[0] || body[0];
     const elements = Array.from(content.getElementsByTagNameNS(ns, '*'));
@@ -331,7 +477,10 @@
   }
 
   async function readTable(name, bytes, optional = false, options) {
-    const {text, sheet, brief} = /\.xlsx$/i.test(name) ? await readXlsx(bytes) : /\.docx$/i.test(name) ? await readDocx(bytes,name) : {text: decode(bytes)};
+    if (/\.xlsx$/i.test(name)) return readXlsx(bytes,name,optional,options);
+    const data = /\.docx$/i.test(name) ? await readDocx(bytes,name,optional) : {text: decode(bytes)};
+    if (!data) return null;
+    const {text, sheet, brief} = data;
     if (brief) return brief;
     if (textBriefExtension.test(name)) {
       const labeled = briefPayload(text,name);
@@ -364,24 +513,29 @@
     } else throw Error('Підтримуються CSV, TSV, TXT, MD, XLSX, DOCX, HTML, ZIP та RAR.');
 
     const tables = [];
+    const tableNames = new Set();
     const sources = entries.filter(entry => /\.html?$/i.test(entry.name));
     const hasHtml = sources.length>0;
-    for (const entry of entries.filter(entry => tableExtension.test(entry.name) && !/(?:^|\/)readme(?:[._ -]|$)/i.test(entry.name))) {
-      const optional = textBriefExtension.test(entry.name);
-      // A README or other plain text note is not an import table.
-      const candidate = await readTable(entry.name, entry.bytes, optional,{...options,hasHtml});
-      if (candidate) tables.push(candidate);
-      if (tables.length > 1) break;
+    const sourceAssets = new Set(sources.flatMap(({name})=>[name,name.split('/').pop()]));
+    const candidates = entries.filter(entry => tableExtension.test(entry.name) && !/(?:^|\/)readme(?:[._ -]|$)/i.test(entry.name));
+    const structured = candidates.filter(entry=>!textBriefExtension.test(entry.name) && !notesName.test(entry.name));
+    for (const entry of candidates) {
+      const allowUnknown = structured.length===1 && structured[0]===entry;
+      const candidate = await readTable(entry.name, entry.bytes, true,{...options,hasHtml,sourceAssets,allowUnknown});
+      if (!candidate) continue;
+      const basename = candidate.sourceFile.normalize('NFC').toLowerCase();
+      if (tableNames.has(basename)) throw Error('В архіві кілька джерел з однаковою назвою таблиці. Зробіть назви унікальними.');
+      tableNames.add(basename);
+      tables.push(candidate);
     }
-    if (tables.length > 1) throw Error('В архіві кілька таблиць. Залиште одну таблицю завдань або зіставлення HTML.');
-    const table = tables[0] || null;
+    const table = mergeTables(tables);
     if (!hasHtml) {
       if (table && !table.headers.includes('file')) return table;
       throw Error('В архіві немає HTML-сторінок або самодостатньої таблиці завдань.');
     }
-    if (table && !table.headers.includes('file')) throw Error('В архіві є HTML і таблиця. Для зіставлення вкажіть колонку «file» з іменами HTML-файлів.');
+    if (table && !table.headers.includes('file')) throw Error(placementShapeError);
     let selected = sources;
-    if (table && options?.mapColumns) {
+    if (table) {
       const column = table.headers.indexOf('file');
       const names = new Map();
       for (const source of sources) {
@@ -391,10 +545,12 @@
       }
       const included = new Set();
       const rows = root.PagePosterProjectTable.read(table.text).slice(1);
+      let taskIndex = 0;
       for (const [index, row] of rows.entries()) {
-        if (!row.some(value => value.trim())) continue;
+        if (!hasMappedContent(row,table.headers)) continue;
         const source = names.get(row[column]?.trim());
-        const number = table.sourceRows?.[index] ?? index + 2;
+        const number = table.sourceLocations?.[taskIndex]?.row ?? table.sourceRows?.[taskIndex] ?? index + 2;
+        taskIndex++;
         if (!source || included.has(source)) {
           throw Error('Таблиця: рядок ' + number + '. HTML-файл відсутній, повторюється або вказаний неоднозначно.');
         }
@@ -404,7 +560,7 @@
     }
     const prepared = await root.PagePosterHTMLPackage.prepareArchiveFiles(entries, selected);
     return {...table, type: 'html', files: prepared.map(({name, html},index) => ({
-      name,html,...(options?.mapColumns&&selected[index].name!==name?{path:selected[index].name}:{})
+      name,html,...(table&&selected[index].name!==name?{path:selected[index].name}:{})
     }))};
   }
 

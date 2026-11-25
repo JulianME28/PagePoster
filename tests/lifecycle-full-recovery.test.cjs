@@ -1,0 +1,37 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
+const key=Buffer.alloc(32,7).toString('base64'),otherKey=Buffer.alloc(32,9).toString('base64'),passphrase='correct backup passphrase';
+
+test('full recovery includes encrypted proxy settings and rebinds them to the destination master key',async t=>{
+ const f=await fixture(t),{createProxySettings}=await import('../server/lifecycle/proxy-settings.mjs'),api=await import('../server/lifecycle/full-recovery.mjs');
+ const settings=await createProxySettings({dataDir:f.src,masterKey:key});await settings.save({enabled:true,list:'a.example:8000:alice:private-proxy-password',expectedRevision:0});await settings.close();
+ const backup=await api.exportFullBackup({dataDir:f.src,masterKey:key,passphrase}),dst=path.join(f.dir,'proxy-restored');await api.restoreFullBackup({dataDir:dst,masterKey:otherKey,backup,passphrase});
+ const restored=await createProxySettings({dataDir:dst,masterKey:otherKey});assert.equal(restored.status().count,1);assert.equal(restored.status().enabled,true);await restored.close();assert.doesNotMatch(fs.readFileSync(path.join(dst,'proxy-settings.json'),'utf8'),/alice|private-proxy-password/);
+});
+async function fixture(t){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'pp-recovery-'));const {createStore}=await import('../server/lifecycle/store.mjs'),{createRunStore}=await import('../server/lifecycle/run-store.mjs'),{createAIBudget}=await import('../server/lifecycle/ai-budget.mjs'),{createAPIKeyVault}=await import('../server/lifecycle/api-key.mjs');const src=path.join(dir,'source');fs.mkdirSync(src);const store=createStore({filename:path.join(src,'pageposter.sqlite'),masterKey:key}),runs=createRunStore({filename:path.join(src,'generation-runs.sqlite')}),budget=createAIBudget({filename:path.join(src,'ai-budget.sqlite')});t.after(()=>{store.close();runs.close();budget.close();fs.rmSync(dir,{recursive:true,force:true});});const project=store.createProject({name:'Recovery'}),site=store.createSite(project.id,{name:'Site',baseUrl:'https://example.org',username:'secret-editor',applicationPassword:'private-pass'});const vault=createAPIKeyVault({filename:path.join(src,'openai-key.json'),masterKey:key});await vault.write('sk-this-is-private-key-for-fixture');store.createPage(project.id,{title:'Page',siteId:site.id});return {dir,src,store,runs,budget,project,site,createStore,createAPIKeyVault};}
+test('full encrypted backup round trips credentials, records, queues and screenshots to a new key',async t=>{const f=await fixture(t),api=await import('../server/lifecycle/full-recovery.mjs');f.store.createRecord(f.project.id,'replacement-batch',{state:'pending',items:[]});const job=f.store.enqueueJob({projectId:f.project.id,siteId:f.site.id,type:'site_check',idempotencyKey:'stable'});const screenshot='screenshots/12345678-1234-1234-1234-123456789abc/pageposter-12345678-desktop.png';fs.mkdirSync(path.dirname(path.join(f.src,screenshot)),{recursive:true});fs.writeFileSync(path.join(f.src,screenshot),Buffer.from([137,80,78,71]));const archive=await api.exportFullBackup({dataDir:f.src,masterKey:key,passphrase});assert.doesNotMatch(JSON.stringify(archive),/private-pass|secret-editor|sk-this|Recovery/);const info=await api.inspectFullBackup({backup:archive,passphrase});assert.equal(info.summary.projects,1);assert.equal(info.summary.jobs,1);const target=path.join(f.dir,'restored');await api.restoreFullBackup({dataDir:target,masterKey:otherKey,backup:archive,passphrase});assert.deepEqual(fs.readFileSync(path.join(target,screenshot)),Buffer.from([137,80,78,71]));const restored=f.createStore({filename:path.join(target,'pageposter.sqlite'),masterKey:otherKey});try{assert.equal(restored.getSiteCredentials(f.site.id).applicationPassword,'private-pass');assert.equal(restored.getSite(f.site.id).enabled,false);assert.equal(restored.getJob(job.id).state,'paused');assert.equal(restored.listRecords(f.project.id,'replacement-batch').length,1);assert.equal(await f.createAPIKeyVault({filename:path.join(target,'openai-key.json'),masterKey:otherKey}).read(),'sk-this-is-private-key-for-fixture');}finally{restored.close();}});
+test('Google work account credentials survive encrypted recovery under the new local key',async t=>{
+ const f=await fixture(t),api=await import('../server/lifecycle/full-recovery.mjs'),{createSecretBox}=await import('../server/lifecycle/secrets.mjs'),identity='pageposter:google-oauth:v1',credentials={username:'google-oauth',applicationPassword:JSON.stringify({client:{clientId:'fixture.apps.googleusercontent.com',clientSecret:'private-client-secret'},tokens:{refreshToken:'private-refresh-token'}})};
+ fs.writeFileSync(path.join(f.src,'google-oauth.json'),JSON.stringify(createSecretBox(key).encrypt(identity,credentials)));
+ const archive=await api.exportFullBackup({dataDir:f.src,masterKey:key,passphrase});assert.doesNotMatch(JSON.stringify(archive),/private-refresh-token|private-client-secret/);
+ const target=path.join(f.dir,'google-restored');await api.restoreFullBackup({dataDir:target,masterKey:otherKey,backup:archive,passphrase});
+ const envelope=JSON.parse(fs.readFileSync(path.join(target,'google-oauth.json'),'utf8'));assert.deepEqual(createSecretBox(otherKey).decrypt(identity,envelope),credentials);assert.throws(()=>createSecretBox(key).decrypt(identity,envelope));
+});
+
+test('wrong password, tampered archive and nonempty destination cannot restore',async t=>{const f=await fixture(t),api=await import('../server/lifecycle/full-recovery.mjs'),archive=await api.exportFullBackup({dataDir:f.src,masterKey:key,passphrase});await assert.rejects(api.inspectFullBackup({backup:archive,passphrase:'another wrong password'}),{code:'BACKUP_PASSWORD_INVALID'});await assert.rejects(api.restoreFullBackup({dataDir:f.src,masterKey:key,backup:archive,passphrase}),{code:'RESTORE_NOT_EMPTY'});const bad={...archive,ciphertext:archive.ciphertext.slice(0,-4)+'AAAA'};await assert.rejects(api.inspectFullBackup({backup:bad,passphrase}),{code:'BACKUP_PASSWORD_INVALID'});});
+test('full recovery preserves browser mode and freezes unsent and unresolved WordPress Trash actions',async t=>{
+ const f=await fixture(t),api=await import('../server/lifecycle/full-recovery.mjs');
+ fs.writeFileSync(path.join(f.src,'autopilot-browser-settings.json'),JSON.stringify({mode:'hidden'}));
+ const queued=f.store.createRecord(f.project.id,'published_trash',{pageId:'queued-page',state:'queued',phase:'prepared'},'published-trash:queued-page');
+ const sent=f.store.createRecord(f.project.id,'published_trash',{pageId:'sent-page',state:'running',phase:'dispatching'},'published-trash:sent-page');
+ const turn=f.store.createRecord(f.project.id,'publication_turn',{runId:sent.id,releasedAt:null},'publication-turn:global');
+ const archive=await api.exportFullBackup({dataDir:f.src,masterKey:key,passphrase}),target=path.join(f.dir,'restore-trash');
+ await api.restoreFullBackup({dataDir:target,masterKey:otherKey,backup:archive,passphrase});
+ assert.deepEqual(JSON.parse(fs.readFileSync(path.join(target,'autopilot-browser-settings.json'),'utf8')),{mode:'hidden'});
+ const restored=f.createStore({filename:path.join(target,'pageposter.sqlite'),masterKey:otherKey});
+ try{
+  assert.equal(restored.getRecord(queued.id).state,'failed');
+  assert.equal(restored.getRecord(sent.id).state,'uncertain');
+  assert.equal(restored.getRecord(sent.id).phase,'dispatching');
+  assert.ok(restored.getRecord(turn.id).releasedAt);
+ }finally{restored.close();}
+});

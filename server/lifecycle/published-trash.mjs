@@ -5,6 +5,7 @@ const kind='published_trash';
 const key=pageId=>'published-trash:'+pageId;
 const fail=(code,message=code)=>{throw Object.assign(Error(message),{code});};
 const pending=record=>['queued','running'].includes(record?.state);
+const needsFreshDecline=record=>record?.requireFreshDecline===true||record?.phase==='published_verified';
 const terminal=record=>['completed','failed','uncertain'].includes(record?.state);
 export function createPublishedTrash({store,publicationTurn,browser,hasActivePage,clock=Date.now}){
  const get=pageId=>store.getRecord(key(pageId));
@@ -23,14 +24,14 @@ export function createPublishedTrash({store,publicationTurn,browser,hasActivePag
   const canTrash=!!target(page,run);
   if(record?.pageRevision!==page.revision)return {canTrash};
   if(pending(record))return {state:'trash_queued',canTrash:false};
-  if(record?.state==='uncertain')return {state:'trash_uncertain',canTrash,trashMessage:'WordPress ще не підтвердив кошик. Повторна дія лише звірить стан.'};
+  if(record?.state==='uncertain')return {state:'trash_uncertain',canTrash,...(needsFreshDecline(record)?{retryTrashRevision:record.revision}:{}),trashMessage:'WordPress ще не підтвердив кошик. Повторна дія лише звірить стан.'};
   if(record?.state==='failed'){
-   const message=record.errorCode==='PROJECT_CLOSED'?'Проєкт було закрито до перенесення. Щоб продовжити, відхиліть сторінку ще раз.':
+   const message=record.errorCode==='NATIVE_TRASH_STILL_PUBLISHED'?'WordPress підтвердив, що сторінка досі опублікована без змін. Відхиліть її ще раз для перенесення в кошик.':record.errorCode==='PROJECT_CLOSED'?'Проєкт було закрито до перенесення. Щоб продовжити, відхиліть сторінку ще раз.':
     record.errorCode==='RESTORED_PAUSED'?'Дію відновлено з резервної копії. Перевірте доступ до WordPress і відхиліть сторінку ще раз.':
     record.errorCode==='NATIVE_CONTENT_CHANGED'?'Вміст у WordPress змінився після публікації. Відкрийте редактор, щоб перевірити сторінку.':
     ['BROWSER_CAPTCHA_REQUIRED','BROWSER_LOGIN_REQUIRED','bootstrap_auth_failed','NATIVE_TRASH_ACCESS'].includes(record.errorCode)?'Не вдалося ввійти у WordPress зі збереженим доступом.':
     'Не вдалося перенести сторінку в кошик. Перевірте доступ і права у WordPress.';
-   return {state:'trash_failed',canTrash,trashMessage:message};
+   return {state:'trash_failed',canTrash,trashMessage:message,...(needsFreshDecline(record)?{retryTrashRevision:record.revision}:{})};
   }
   return {canTrash};
  }
@@ -38,14 +39,15 @@ export function createPublishedTrash({store,publicationTurn,browser,hasActivePag
   return hasActivePage(page.id)||store.listRecords(page.projectId,'native_update').some(record=>record.pageId===page.id&&!['completed','failed'].includes(record.state))||
    store.listJobs(page.projectId).some(job=>job.pageId===page.id&&job.effect==='write'&&['queued','running','uncertain','paused'].includes(job.state));
  }
- function schedule(page,run){
+ function schedule(page,run,expectedTrashRevision){
   const previous=get(page.id);
   if(pending(previous)&&previous.pageRevision===page.revision)return view(page,run);
   const destination=target(page,run);
   if(!destination)fail('CONFLICT','Для перенесення в кошик потрібна сторінка PagePoster зі збереженим доступом до WordPress.');
   if(hasWrite(page))fail('CONFLICT','Дочекайтеся завершення поточних змін сторінки.');
+  if(needsFreshDecline(previous)&&(previous.revision!==expectedTrashRevision||previous.pageRevision!==page.revision))fail('CONFLICT','Оновіть рішення після підтвердження стану сторінки у WordPress.');
   if(previous?.state==='uncertain'&&previous.pageRevision!==page.revision)fail('CONFLICT','Сторінка змінилася, поки WordPress підтверджував кошик.');
-  const patch={pageId:page.id,pageRevision:page.revision,originRunId:run.id,siteId:page.siteId,postId:page.wpId,url:page.fullUrl,contentHash:destination.saved.contentHash,sourceBinding:destination.sourceBinding,
+  const patch={requireFreshDecline:needsFreshDecline(previous),pageId:page.id,pageRevision:page.revision,originRunId:run.id,siteId:page.siteId,postId:page.wpId,url:page.fullUrl,contentHash:destination.saved.contentHash,sourceBinding:destination.sourceBinding,
    state:'queued',phase:previous?.state==='uncertain'?previous.phase:'prepared',stage:'trashing',errorCode:null};
   if(previous)update(previous,patch);else store.createRecord(page.projectId,kind,patch,key(page.id));
   return view(page,run);
@@ -76,7 +78,22 @@ export function createPublishedTrash({store,publicationTurn,browser,hasActivePag
    if(session.baseUrl&&session.baseUrl!==site.baseUrl)fail('NATIVE_CONTENT_CHANGED');
    await session.login(binding);
    const input={saved:{postId:page.wpId,phase:'published',url:page.fullUrl},title:saved.title,html:saved.content};
-   const proof=async()=>{const result=await session.inspectOwnedTrash(input);if(result?.status!=='trash'||result.postId!==page.wpId)fail('NATIVE_TRASH_UNCERTAIN');return result;};
+   const proof=async()=>{
+    const result=await session.inspectOwnedTrash(input);
+    if(result?.postId===page.wpId&&result.status==='trash')return result;
+    if(result?.postId===page.wpId&&result.status==='unknown'&&get(page.id)?.phase==='dispatching'&&session.inspectOwnedPublished){
+     const published=await session.inspectOwnedPublished(input);
+     if(published?.postId===page.wpId&&published.status==='publish'&&published.url===page.fullUrl){
+      store.atomic(()=>{
+       const {current}=guard(record);
+       if(current.phase!=='dispatching')fail('NATIVE_TRASH_UNCERTAIN');
+       update(current,{state:'failed',phase:'published_verified',requireFreshDecline:true,errorCode:'NATIVE_TRASH_STILL_PUBLISHED'});
+      });
+      return null;
+     }
+    }
+    fail('NATIVE_TRASH_UNCERTAIN');
+   };
    const beforeSend=()=>{
     const {current}=guard(record);
     if(current.phase!=='dispatching'||!isDeepStrictEqual(binding,store.getBrowserCredentials(site.id)))fail('NATIVE_CONTENT_CHANGED');
@@ -92,6 +109,7 @@ export function createPublishedTrash({store,publicationTurn,browser,hasActivePag
     try{result=await session.trashPublished({...input,beforeSend,checkpoint});}
     catch(error){if(get(page.id)?.phase==='prepared')throw error;result=await proof();}
    }
+   if(!result&&get(page.id)?.phase==='published_verified')return;
    if(result?.status!=='trash'||result.postId!==page.wpId)fail('NATIVE_TRASH_UNCERTAIN');
    store.atomic(()=>{
     const {page:current}=guard(record,{allowArchived:true});

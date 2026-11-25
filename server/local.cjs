@@ -5,7 +5,7 @@ const path = require('node:path');
 const { Readable } = require('node:stream');
 const { pathToFileURL } = require('node:url');
 const root = path.join(__dirname,'..','dist');
-const assetNames = new Set(['index.html','autopilot.html','autopilot.css','autopilot-ui.js','autopilot-recovery.js','project-queue-ui.js','project-queue.css','proxy-settings-ui.js','proxy-check-ui.js','workspace-ui.js','workspace.css','google-account-ui.js','google-account.css','styles.css','purify.min.js','csstree.js','html-import.js','html-package.js','project-table.js','project-normalizer.js','page-runtime.js','generator.js','link-placements.js','design-variants.js','app.js','ai-core.js','ai-ui.js','plugin-download.js','run-ui.js','campaign-ui.js','lifecycle-ui.js','lifecycle.css','PagePoster.html']);
+const assetNames = new Set(['index.html','autopilot.html','autopilot.css','autopilot-ui.js','autopilot-recovery.js','project-queue-ui.js','project-queue.css','proxy-settings-ui.js','proxy-check-ui.js','workspace-ui.js','workspace.css','google-account-ui.js','google-account.css','styles.css','purify.min.js','csstree.js','html-import.js','html-package.js','project-table.js','project-normalizer.js','generation-options.js','page-runtime.js','generator.js','link-placements.js','design-variants.js','app.js','ai-core.js','ai-ui.js','plugin-download.js','run-ui.js','campaign-ui.js','lifecycle-ui.js','lifecycle.css','PagePoster.html']);
 const types = {'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
 async function createLocalServer({env=process.env,fetchImpl=globalThis.fetch,lifecycle: lifecycleOptions}={}) {
   const {createAIHandler} = await import(pathToFileURL(path.join(__dirname,'ai.mjs')).href);

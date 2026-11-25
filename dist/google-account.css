@@ -10,13 +10,11 @@
 .ga-note { margin: 12px 0; padding: 10px 12px; border-radius: 8px; background: #fff; border: 1px solid #cdddf0; color: #4b6486; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .ga-note.error { color: #94442c; background: #fff6ef; border-color: #f0d0be; }
 .ga-setup { margin: 14px 0; font-size: 12px; line-height: 1.7; }
-.ga-setup summary { color: #3766a5; font-weight: 600; cursor: pointer; }
-.ga-setup ol { margin: 12px 0; padding-left: 22px; color: #4a617e; }
-.ga-setup li { margin: 8px 0; }
+.ga-setup p { margin: 0; color: #4a617e; }
 .ga-card a { color: #3164ac; overflow-wrap: anywhere; }
-.ga-setup code { font-size: 11px; overflow-wrap: anywhere; word-break: break-word; }
 .ga-card .ga-file-label { margin: 14px 0 4px; }
 .ga-file-label input { width: 100%; min-width: 0; padding: 8px; background: #fff; font-size: 12px; }
+.ga-setup .ap-button { margin-top: 8px; }
 .ga-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 13px 0 0; }
 .ga-actions .ap-button { white-space: normal; }
 .ga-open-link { display: inline-block; margin-top: 12px; font-size: 12px; font-weight: 600; }

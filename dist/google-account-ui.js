@@ -1,19 +1,84 @@
-/* Ordinary Google OAuth: registration belongs to the app, never to its user. */
+/* Google OAuth with managed or locally configured Desktop app registration. */
 (()=>{
  'use strict';
  const $=id=>document.getElementById(id),dialog=$('ap-settings'),mode=$('ga-mode'),user=$('ga-user'),service=$('ga-service'),status=$('ga-status'),note=$('ga-note'),connect=$('ga-connect'),cancel=$('ga-cancel'),disconnect=$('ga-disconnect'),openLink=$('ga-open-link');
  if(![dialog,mode,user,service,status,note,connect,cancel,disconnect,openLink].every(Boolean))return;
- const errors={KEY_REQUIRED:'Перезапустіть PagePoster, щоб відкрити захищене сховище.',GOOGLE_CLIENT_REQUIRED:'Вхід Google не налаштований у цій збірці PagePoster. Потрібне оновлення застосунку.',GOOGLE_AUTH_REQUIRED:'Увійдіть через Google, щоб продовжити читання таблиці.',GOOGLE_AUTH_FAILED:'Google не завершив вхід. Перевірте повідомлення на сторінці Google.',GOOGLE_AUTH_CANCELLED:'Вхід скасовано. Можна вибрати акаунт ще раз.',GOOGLE_AUTH_TIMEOUT:'Час очікування входу минув. Натисніть «Увійти через Google» ще раз.',source_access_denied:'Акаунт підключено, але Google відмовив у читанні вибраної таблиці. Перевірте, чи на сторінці входу вибрано потрібний акаунт.',SOURCE_NOT_CONFIGURED:'Збережіть посилання на потрібну вкладку таблиці.'};
+ const errors={KEY_REQUIRED:'Перезапустіть PagePoster, щоб відкрити захищене сховище.',GOOGLE_CLIENT_REQUIRED:'Для входу через Google спочатку імпортуйте реєстрацію застосунку.',GOOGLE_CLIENT_INVALID:'Виберіть коректний JSON-файл OAuth-клієнта типу Desktop app.',GOOGLE_AUTH_REQUIRED:'Увійдіть через Google, щоб продовжити читання таблиці.',GOOGLE_AUTH_FAILED:'Google не завершив вхід. Перевірте повідомлення на сторінці Google.',GOOGLE_AUTH_CANCELLED:'Вхід скасовано. Можна вибрати акаунт ще раз.',GOOGLE_AUTH_TIMEOUT:'Час очікування входу минув. Натисніть «Увійти через Google» ще раз.',source_access_denied:'Акаунт підключено, але Google відмовив у читанні вибраної таблиці. Перевірте, чи на сторінці входу вибрано потрібний акаунт.',SOURCE_NOT_CONFIGURED:'Збережіть посилання на потрібну вкладку таблиці.'};
+ const signInHelp=$('ga-sign-in-help');
+ let setup=null;
  let account={clientConfigured:false,connected:false,phase:'idle',email:''},known=false,busy=false,epoch=0,timer=null,reading=null,prepared=null,verification=null,verified='';
  const visible=()=>dialog.open&&mode.value==='user';
  function message(text,error=false){note.textContent=String(text||'').slice(0,500);note.hidden=!text;note.classList.toggle('error',error);}
  function stop(){clearTimeout(timer);timer=null;}
  function clearLink(){openLink.hidden=true;openLink.removeAttribute('href');}
  function changed(){window.dispatchEvent(new CustomEvent('pageposter:google-account-changed'));}
+ async function readRegistration(file){
+  if(file.size>32*1024)throw Error('Розмір JSON-файла має бути до 32 КБ.');
+  let registration;
+  try{registration=JSON.parse(await file.text());}catch{throw Error(errors.GOOGLE_CLIENT_INVALID);}
+  const installed=registration?.installed;
+  const {client_id,client_secret}=installed||{};
+  if(registration?.web||registration?.type==='service_account'||!installed||Array.isArray(installed)||
+    typeof client_id!=='string'||client_id.length>256||!/^[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/.test(client_id)||
+    typeof client_secret!=='string'||!client_secret.length||client_secret.length>4096||/[\u0000-\u0020\u007f]/.test(client_secret)){
+   throw Error(errors.GOOGLE_CLIENT_INVALID);
+  }
+  return {installed:{client_id,client_secret}};
+ }
+ function renderSetup(show){
+  if(!show){
+   if(setup){setup.querySelector('input').value='';setup.remove();setup=null;}
+   return;
+  }
+  if(!setup){
+   setup=document.createElement('div');
+   setup.id='ga-setup';
+   setup.className='ga-setup';
+   setup.innerHTML='<p>Отримайте JSON-файл для вашої реєстрації OAuth-клієнта типу <strong>Desktop app</strong> у відповідального за PagePoster або адміністратора Google Cloud. Для підключення за даними сервісного акаунта виберіть «Сервісний акаунт» вище.</p><label class="ap-field ga-file-label">JSON-файл реєстрації Google<input id="ga-client-file" type="file" accept=".json,application/json"></label><button id="ga-client-import" class="ap-button ap-secondary" type="button" disabled>Імпортувати реєстрацію</button>';
+   const fileInput=setup.querySelector('input'),importButton=setup.querySelector('button');
+   fileInput.addEventListener('change',()=>{importButton.disabled=!fileInput.files.length;message('');});
+   importButton.addEventListener('click',()=>action(async active=>{
+    const file=fileInput.files[0];
+    fileInput.value='';
+    if(!file)return;
+    const client=await readRegistration(file);
+    if(!active())return;
+    try{
+     const result=await request('google/client',{client,expectedUnconfigured:true});
+     if(!active())return;
+     if(result.account?.clientConfigured!==true)throw Error();
+     accept(result.account,true);
+    }catch(error){
+     if(error.code==='CONFLICT'){
+      if(!active())return;
+      try{
+       const result=await request('google/account');
+       if(!active())return;
+       accept(result.account);
+       message(account.clientConfigured?'Вхід через Google уже налаштовано в іншому вікні.':'Інше вікно налаштовує вхід через Google. Відкрийте налаштування ще раз, щоб оновити стан.');
+      }catch{
+       if(!active())return;
+       known=false;
+       message('Не вдалося оновити стан підключення Google. Відкрийте налаштування ще раз.',true);
+      }
+      return;
+     }
+     throw Error(error.code==='KEY_REQUIRED'?errors.KEY_REQUIRED:'Не вдалося зберегти реєстрацію Google. Перевірте файл і спробуйте ще раз.');
+    }
+    message('Реєстрацію збережено. Тепер можна увійти через Google.');
+   }));
+   note.before(setup);
+  }
+  const fileInput=setup.querySelector('input');
+  fileInput.disabled=busy;
+  setup.querySelector('button').disabled=busy||!fileInput.files.length;
+ }
  function render(){
   user.hidden=mode.value!=='user';service.hidden=mode.value!=='service';const input=service.querySelector('[name="serviceAccount"]');if(input)input.disabled=mode.value!=='service';
-  mode.disabled=busy;connect.disabled=busy||!known||account.phase==='waiting';connect.textContent=account.connected?'Вибрати інший акаунт':'Увійти через Google';cancel.hidden=account.phase!=='waiting';cancel.disabled=busy;disconnect.hidden=!account.connected;disconnect.disabled=busy;
-  status.textContent=!known?'Перевіряємо підключення…':account.phase==='waiting'?'Завершіть вхід у Chrome. PagePoster отримає підключення автоматично.':account.connected?'Підключений акаунт: '+(account.email||'Google'):'Натисніть «Увійти через Google» і виберіть акаунт, якому доступна таблиця.';
+  renderSetup(visible()&&known&&!account.clientConfigured);
+  if(signInHelp)signInHelp.hidden=!account.clientConfigured;
+  mode.disabled=busy;connect.disabled=busy||!known||!account.clientConfigured||account.phase==='waiting';connect.textContent=account.connected?'Вибрати інший акаунт':'Увійти через Google';cancel.hidden=account.phase!=='waiting';cancel.disabled=busy;disconnect.hidden=!account.connected;disconnect.disabled=busy;
+  status.textContent=!known?'Перевіряємо підключення…':!account.clientConfigured?errors.GOOGLE_CLIENT_REQUIRED:account.phase==='waiting'?'Завершіть вхід у Chrome. PagePoster отримає підключення автоматично.':account.connected?'Підключений акаунт: '+(account.email||'Google'):'Натисніть «Увійти через Google» і виберіть акаунт, якому доступна таблиця.';
  }
  async function request(path,body){
   const response=await fetch('/api/lifecycle/'+path,{method:body===undefined?'GET':'POST',credentials:'same-origin',headers:{'X-PagePoster-Request':'1',...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});let result;try{result=await response.json();}catch{throw Error('PagePoster не підтвердив відповідь. Відкрийте налаштування ще раз.');}

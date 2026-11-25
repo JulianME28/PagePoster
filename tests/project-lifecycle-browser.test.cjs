@@ -1,0 +1,27 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const playwrightPath=require('./browser-runtime.cjs').playwrightPath;
+const chrome=require('./browser-runtime.cjs').chromePath;
+test('desktop project manager closes, trashes, restores and keeps unrelated projects visible',{timeout:45000,skip:!(fs.existsSync(playwrightPath)&&fs.existsSync(chrome))},async t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'pp-project-ui-')),{createLocalServer}=require('../server/local.cjs');
+ const server=await createLocalServer({env:{},lifecycle:{dataDir:dir,masterKey:Buffer.alloc(32,18).toString('base64')}});
+ const first=server.lifecycle.store.createProject({name:'Temporary project',workflowType:'html'}),second=server.lifecycle.store.createProject({name:'Keep this project',workflowType:'ai'});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin='http://127.0.0.1:'+server.address().port;
+ const browser=await require(playwrightPath).chromium.launch({executablePath:chrome,headless:true,args:['--disable-background-networking','--no-first-run']});
+ const context=await browser.newContext({viewport:{width:1440,height:1000}}),page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
+ t.after(async()=>{await context.close();await browser.close();await new Promise(resolve=>server.close(resolve));await server.closeResources();fs.rmSync(dir,{recursive:true,force:true});assert.deepEqual(errors,[]);});
+ await page.goto(origin);await page.getByRole('button',{name:first.name,exact:true}).waitFor();await page.getByRole('button',{name:'Керувати проєктами',exact:true}).click();
+ const manager=page.locator('#ap-project-manager'),row=()=>manager.locator('[data-project-id="'+first.id+'"]');
+ await row().getByRole('button',{name:'Закрити',exact:true}).click();await page.locator('#ap-project-action-confirm').click();
+ await row().waitFor({state:'detached'});assert.equal(server.lifecycle.store.getProject(first.id).archived,true);assert.equal(await page.locator('#ap-project-list').getByRole('button',{name:first.name,exact:true}).count(),0);
+ await page.locator('#ap-project-scope').selectOption('closed');await row().getByRole('button',{name:'До кошика',exact:true}).click();
+ await page.locator('#ap-project-action-cancel').click();assert.equal(server.lifecycle.store.getProject(first.id).trashed,false);
+ await row().getByRole('button',{name:'До кошика',exact:true}).click();await page.locator('#ap-project-action-confirm').click();await row().waitFor({state:'detached'});
+ await page.locator('#ap-project-scope').selectOption('trash');await row().getByRole('button',{name:'Відновити',exact:true}).click();await page.locator('#ap-project-action-confirm').click();
+ await page.waitForFunction(()=>document.querySelector('#ap-project-scope').value==='active');await row().waitFor();assert.equal(server.lifecycle.store.getProject(first.id).archived,false);
+ assert.equal(server.lifecycle.store.getProject(first.id).trashed,false);assert.equal(server.lifecycle.store.getRecord('queue-control:'+first.id).paused,true);
+ assert.equal(await manager.locator('[data-project-id="'+second.id+'"]').count(),1);
+ await page.locator('#ap-project-manager [data-close]').click();await page.getByRole('button',{name:first.name,exact:true}).click();await page.locator('#ap-title').getByText(first.name,{exact:true}).waitFor();
+ await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'Керувати проєктами',exact:true}).click();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
+});

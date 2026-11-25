@@ -1,0 +1,113 @@
+{
+  "input": {
+    "requestId": "stability-ec6fc80f-8170-4e40-ac26-07ab75dc9a45",
+    "links": [
+      {
+        "url": "https://offer50.example/?ref=language%2Ftest",
+        "anchor": "casinotest1"
+      }
+    ],
+    "variation": "language-pl",
+    "editorial": {
+      "format": "article",
+      "topic": "poker",
+      "customTopic": "",
+      "language": "pl"
+    }
+  },
+  "plan": {
+    "language": "pl",
+    "topic": "Poker",
+    "title": "Cash games i turnieje: jak zmiana bodźców wpływa na decyzje w pokerze",
+    "brand": "Pokerowy Przewodnik",
+    "brandTagline": "Zrozum mechanizmy gry, nie szanse",
+    "intro": "W pokerze decyzje podejmowane są nie tylko na podstawie posiadanych kart, lecz także w zależności od formatu gry. Różnica między cash games a turniejami prowadzi do zmiany bodźców, które wpływają na taktykę i strategie. Omówimy, jak te odmienne struktury zmieniają sposób podejmowania decyzji.",
+    "cardsTitle": "Zasady formatów",
+    "articleTitle": "Wpływ bodźców na decyzje w cash games i turniejach pokerowych",
+    "faqTitle": "Najczęściej zadawane pytania",
+    "footerTitle": "O Pokerowym Przewodniku",
+    "footer": "Pokerowy Przewodnik to miejsce, gdzie znajdziesz przemyślane analizy i praktyczne porady dotyczące różnych form pokera.",
+    "footerLinksTitle": "Przydatne linki",
+    "footerNote": "Gra odpowiedzialna – poker to rozrywka, nie sposób na zarobek.",
+    "ctaLabel": "Odwiedź casinotest1",
+    "tocTitle": "Spis treści",
+    "tableTitle": "Różnice między cash games a turniejami",
+    "tableText": "Element|Cash games|Turnieje\nRodzaj ryzyka|Stałe stawki, bez ryzyka wyeliminowania z gry|Rosnące ryzyko eliminacji, zmienna wartość żetonów\nStrategia|Skupiona na długoterminowym zysku na podstawie wartości oczekiwanej|Uwzględniająca wzrost presji i różne fazy turnieju\nZarządzanie żetonami|Można dokładać pieniądze, jeśli saldo się wyczerpie|Brak możliwości dokupienia – stały stack do końca\nCele gry|Stały dochód lub wygrana na godzinę|Przetrwanie i dojście do kasy, potem zwiększenie agresji\nPresja psychologiczna|Mniejsza – brak eliminacji|Wysoka, strach przed odpadnięciem zmienia decyzje\nAdaptacja|Możliwość eksperymentów i nauki|Konieczność dostosowania strategii do etapu i sytuacji",
+    "design": {
+      "preset": "emerald",
+      "fontFamily": "Georgia",
+      "colors": {
+        "background": "#FAFAF4",
+        "accent": "#2A9D8F",
+        "header": "#264653",
+        "card": "#E9F1F0"
+      }
+    },
+    "offers": [
+      {
+        "linkIndex": 0,
+        "description": "Sprawdź oferty cash games i turniejów na casinotest1",
+        "button": "Odwiedź casinotest1"
+      }
+    ],
+    "sections": [
+      {
+        "title": "Jak struktura cash games wpływa na decyzje",
+        "body": "W cash games gracze mają stałe stawki i nie grozi im eliminacja. Gdy przegrywają swoje żetony, mogą wrócić do stołu dodając kolejne środki. Dzięki temu strategia koncentruje się na maksymalizacji długoterminowego zysku i dokładnej kalkulacji expected value. Na przykład, jeśli gracz ma rękę z umiarkowaną szansą na wygraną, ale z wysoką wartością oczekiwaną, opłaca mu się podejmować ryzyko, bo w dłuższym okresie przyniesie ono zysk. Brak presji eliminacji pozwala również na większą elastyczność w eksperymentowaniu z różnymi podejściami i stylami gry, które można testować przez cały czas przy stołach cash games. Warto zauważyć, że płynność finansowa i możliwość dokładania środków sprawia, że decyzje są mniej gwałtowne i bardziej zrównoważone."
+      },
+      {
+        "title": "Presja eliminacji i etapy w turniejach pokerowych",
+        "body": "Turnieje wprowadzają inny bodziec: ryzyko eliminacji i zmieniający się stack. Tutaj gracze mają ograniczoną pulę żetonów i po ich utracie odpadają z gry. Z tego powodu zasady podejmowania decyzji muszą uwzględniać nie tylko wartość oczekiwaną danej akcji, ale także konsekwencje eliminacji. Wczesne fazy turnieju skłaniają do bardziej zachowawczego stylu gry, by utrzymać stack na bezpiecznym poziomie. W miarę eliminacji uczestników i skracania się liczby graczy, rośnie presja, a zmniejszony stack wymusza agresywne ruchy, by zdobyć żetony od rywali. Niebagatelne znaczenie ma także znajomość etapu turnieju: decyzje podjęte pod koniec turnieju często różnią się od tych w fazie początkowej. Umiejętne balansowanie między ochroną punktów a zdobywaniem przewagi decyduje o sukcesie."
+      },
+      {
+        "title": "Przykład różnicy decyzji: podejście do blefu",
+        "body": "Blef w cash games i w turnieju ma różne znaczenie ze względu na odmienne bodźce. Załóżmy hipotetycznie gracza, który ma marginalną rękę — w cash games ma swobodę blefowania, bo jeśli blef nie wypali, może wrócić bez konsekwencji eliminacji. Stąd częstsze, bardziej ryzykowne blefy mogą być opłacalne. Natomiast w turnieju, zwłaszcza w fazie średniej lub końcowej, ten sam blef niesie ryzyko utraty większości stosu i możliwej eliminacji. Decyzja o blefie musi więc uwzględnić nie tylko rękę i przeciwników, lecz także etapy turnieju i aktualną pozycję żetonów. Bardziej ostrożne podejście lub alternatywne strategie często przeważają, aby nie narażać się na szybkie odpadnięcie z gry. Ten przykład pokazuje, że ta sama akcja może mieć odmienne konsekwencje i dlatego wymaga innego podejścia."
+      },
+      {
+        "title": "Jak zarządzanie żetonami modyfikuje decyzje",
+        "body": "W cash games gracze mogą kiedykolwiek dołożyć więcej pieniędzy do stołu, co wpływa na podejmowanie ryzyka i dynamikę rozgrywki. Możliwość dopełnienia stacka oznacza, że strategia bardziej koncentruje się na średnio- i długoterminowej wartości akcji zamiast na pojedynczym rozdaniu. Przykładowo, gracz może pozwolić sobie na stratę jednej dużej puli, licząc na to, że późniejsze rozdania go zrekompensują. W turniejach jest odwrotnie – stack gracza jest ograniczony i zawsze musi działać w granicach posiadanych żetonów. Nie można dokładać środków, więc każda stracona pula zmniejsza realną szansę na przetrwanie i wygraną. To powoduje, że decyzje są ostrzejsze i bardziej uważne, a gra na krawędzi jest znacznie bardziej ryzykowna. Przykładowo, ryzyko utraty połowy stacka w turnieju może zmusić do pasywnego grania lub czekania na lepsze momenty."
+      },
+      {
+        "title": "Różnice w psychologii gry i nastawieniu do ryzyka",
+        "body": "W cash games gracze są mniej narażeni na presję eliminacji, więc ich decyzje są zazwyczaj bardziej wyważone i bazują na stałych założeniach. Mogą planować grę pod kątem systematycznego zysku. W turniejach presja rośnie wraz ze spadkiem liczby graczy i wielkości stacka. Strach przed odpadnięciem i konieczność szybkiego reagowania powodują często odstępstwa od optymalnej statystycznie gry. Nawet doświadczeni gracze zmieniają nastawienie: niektóre ręce, które na cash games wygodnie się gra, w turniejach stają się trudniejsze do podjęcia z powodu rosnącego ryzyka. Psychologiczne zmęczenie i napięcie potęgują te efekty. Ten czynnik zmienia styl gry i wymaga od zawodnika elastyczności zarówno mentalnej, jak i taktycznej."
+      },
+      {
+        "title": "Dostosowanie strategii do bodźców formatu",
+        "body": "Znajomość różnic między bodźcami cash games a turniejów pozwala graczom lepiej dostosować swoje decyzje. W cash games warto koncentrować się na konsekwentnej, długoterminowej grze i bardziej dokładnym dopasowaniu do przeciwników oraz ich błędów. W turniejach kluczowe jest znajomość faz, odpowiednie zarządzanie stackiem i gotowość na zmianę stylu w zależności od sytuacji. Emocjonalna kontrola i cierpliwość pomagają przeżyć trudne momenty, a agresja umożliwia wykorzystanie okazji. Ten dualizm jest ważnym elementem edukacji pokerowej, bo pozwala wybrać odpowiednią taktykę w zależności od bodźców i dostępnych zasobów podczas gry. Bez tej świadomości decyzje łatwo mogą być nietrafione, mimo dobrej znajomości samej mechaniki pokera."
+      }
+    ],
+    "faq": [
+      {
+        "question": "Czy można stosować te same strategie w cash games i turniejach?",
+        "answer": "Nie, strategie różnią się ze względu na różne bodźce i cele. W cash games nacisk kładzie się na długoterminowy zysk, w turniejach na przetrwanie i zarządzanie stackiem."
+      },
+      {
+        "question": "Jak zmienia się podejście do ryzyka między tymi formatami?",
+        "answer": "W cash games gracze są bardziej skłonni podejmować ryzyko, ponieważ mogą dokładać żetony. W turniejach ryzyko jest większe i wymaga większej ostrożności ze względu na eliminacje."
+      },
+      {
+        "question": "Co wpływa na presję psychiczną podczas gry?",
+        "answer": "W turniejach presja jest wyższa ze względu na możliwość eliminacji i konkurencję o coraz większą pulę, natomiast w cash games presja jest z reguły mniejsza."
+      },
+      {
+        "question": "Dlaczego zarządzanie żetonami jest inne w cash games i turniejach?",
+        "answer": "Ponieważ w cash games można uzupełniać stawkę, a w turniejach stack jest stały, co wymusza inne podejście do ryzyka i planowania gry."
+      },
+      {
+        "question": "Czy intuicja w pokerze działa inaczej w różnych formatach?",
+        "answer": "Tak. Intuicja w turniejach musi uwzględniać presję eliminacji i zmienne warunki; w cash games jest bardziej nastawiona na matematyczną wartość decyzji."
+      }
+    ],
+    "navLabels": {
+      "offers": "Oferty",
+      "guide": "Artykuł",
+      "faq": "FAQ"
+    },
+    "linkSentences": {
+      "link_0": {
+        "before": "Przykładowe oferty cash games i turniejów znajdziesz na",
+        "after": ", gdzie możesz zapoznać się z aktualnymi warunkami gry."
+      }
+    }
+  }
+}

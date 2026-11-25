@@ -232,7 +232,11 @@ export async function createLifecycleService({dataDir,masterKey,client=createWor
    if(route==='/google/browser/close'&&method==='POST'){fields(await input(request),[]);autopilot.invalidateSelection();await browserGoogle.close();return json({account:browserGoogle.status()});}
    if(route==='/google/browser/connect'&&method==='POST'){const body=fields(await input(request),['spreadsheetUrl']);autopilot.invalidateSelection();const result=await browserGoogle.connect(body.spreadsheetUrl||autopilot.status().spreadsheetUrl);return json(result?.connectionUrl?result:{status:result});}
    if(route==='/google/browser/disconnect'&&method==='POST'){fields(await input(request),[]);autopilot.invalidateSelection();return json({account:await browserGoogle.disconnect()});}
-   if(route==='/google/client'&&method==='POST'){const body=fields(await input(request),['client']);return json({account:await google.configure(body.client)});}
+   if(route==='/google/client'&&method==='POST'){
+    const body=fields(await input(request),['client','expectedUnconfigured']);
+    if(body.expectedUnconfigured!==undefined&&body.expectedUnconfigured!==true)throw failure();
+    return json({account:await google.configure(body.client,{expectedUnconfigured:body.expectedUnconfigured})});
+   }
    if(['/google/connect','/google/cancel','/google/disconnect'].includes(route)&&method==='POST'){fields(await input(request),[]);autopilot.invalidateSelection();if(route==='/google/connect')return json(await google.start());return json({account:await(route==='/google/cancel'?google.cancel():google.disconnect())});}
    const projectAction=await projectLifecycle.handle(request,route,input);if(projectAction)return projectAction;
    const queueResult=await projectQueue.handle(request,route,input);if(queueResult)return queueResult;

@@ -1,0 +1,5 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+test('the real desktop backend serves the workspace script and layout assets',async t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'pp-workspace-assets-')),server=await require('../server/local.cjs').createLocalServer({env:{},lifecycle:{dataDir:dir,masterKey:Buffer.alloc(32,79).toString('base64')}});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(async()=>{await new Promise(resolve=>server.close(resolve));await server.closeResources();fs.rmSync(dir,{recursive:true,force:true});});const origin='http://127.0.0.1:'+server.address().port;
+ for(const [asset,type] of [['workspace-ui.js',/javascript/],['workspace.css',/text\/css/]]){const response=await fetch(origin+'/'+asset);assert.equal(response.status,200,asset+' must be served by the packaged backend');assert.match(response.headers.get('content-type'),type);assert.ok((await response.text()).length>100);}
+});

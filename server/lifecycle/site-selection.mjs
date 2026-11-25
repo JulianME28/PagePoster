@@ -1,12 +1,13 @@
 // Aggregate only: callers keep candidate credentials private.
+import {donorDomainKey} from './donor-domain.mjs';
 export function describeSiteSelection(candidates,{criteria={minDr:null,minTraffic:null,geo:''},usedOrigins=[],usedRowIds=[],unavailability={},inputDiagnostics,candidatePolicy}={}){
  if(candidatePolicy!==undefined&&typeof candidatePolicy!=='function')throw new TypeError('candidatePolicy must be a function.');
  const policyEnabled=typeof candidatePolicy==='function';
- const total=new Set(),geo=new Set(),dr=new Set(),eligible=new Set(),available=new Set(),used=new Set(usedOrigins.map(value=>new URL(value).origin)),ids=new Set(usedRowIds),countries=criteria.geo?criteria.geo.split(','):[],origins=new Map();
- const originSet=values=>new Set((Array.isArray(values)?values:[]).flatMap(value=>{try{return [new URL(value).origin];}catch{return [];}}));
+ const total=new Set(),geo=new Set(),dr=new Set(),eligible=new Set(),available=new Set(),used=new Set(usedOrigins.map(donorDomainKey)),ids=new Set(usedRowIds),countries=criteria.geo?criteria.geo.split(','):[],origins=new Map();
+ const originSet=values=>new Set((Array.isArray(values)?values:[]).flatMap(value=>{try{return [donorDomainKey(value)];}catch{return [];}}));
  const published=originSet(unavailability?.publishedOrigins),reserved=originSet(unavailability?.reservedOrigins),excluded=originSet(unavailability?.excludedOrigins),reservedIds=new Set(unavailability?.reservedRowIds||[]),excludedIds=new Set(unavailability?.excludedRowIds||[]);
  for(const candidate of candidates){
-  const origin=new URL(candidate.baseUrl).origin,metrics=candidate.metrics||{};total.add(origin);
+  const origin=donorDomainKey(candidate.baseUrl),metrics=candidate.metrics||{};total.add(origin);
   let observed=origins.get(origin);if(!observed){observed={dr:false,traffic:false,geo:false,eligibleIds:[],...(policyEnabled?{policyBlocked:false,policyTypes:new Set()}: {})};origins.set(origin,observed);}
   if(Number.isFinite(metrics.dr)&&metrics.dr>=0&&metrics.dr<=100)observed.dr=true;
   if(Number.isSafeInteger(metrics.traffic)&&metrics.traffic>=0)observed.traffic=true;

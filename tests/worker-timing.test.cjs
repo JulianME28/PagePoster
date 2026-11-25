@@ -1,0 +1,14 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+async function setup(t,{fail=false}={}){
+ const {createLifecycleService}=await import('../server/lifecycle/service.mjs');const dir=fs.mkdtempSync(path.join(os.tmpdir(),'pp-worker-timing-'));let now=Date.now(),calls=0;
+ const app=await createLifecycleService({dataDir:dir,clock:()=>now,client:{checkSite:async()=>{calls++;await new Promise(resolve=>setTimeout(resolve,20));now+=60000;if(fail)throw Object.assign(Error('private provider text'),{code:'network_timeout'});return {state:'ok'};}}});t.after(async()=>{await app.close();fs.rmSync(dir,{recursive:true,force:true});});
+ const project=app.store.createProject({name:'fixture'}),site=app.store.createSite(project.id,{name:'fixture',baseUrl:'https://worker-fixture.example/'}),job=app.store.enqueueJob({projectId:project.id,siteId:site.id,type:'site_check',idempotencyKey:'timing'});now+=5000;
+ return {app,job,calls:()=>calls};
+}
+test('worker timing separates actual monotonic processing from created-to-claim wall wait and lifetime',async t=>{
+ const f=await setup(t);await f.app.tick();const job=f.app.store.getJob(f.job.id);assert.equal(job.state,'completed');assert.equal(f.calls(),1);const timing=job.result.timing;assert.equal(timing.timingScope,'worker_operation');assert.ok(timing.workerElapsedMs>=10&&timing.workerElapsedMs<10000);assert.equal(timing.queueWaitMs,5000);assert.equal(timing.queueWaitScope,'job_created_to_claim_wall');assert.equal(timing.jobLifetimeMs,65000);assert.equal(timing.networkMs,null);assert.doesNotMatch(JSON.stringify(timing),/worker-fixture|private provider/);
+});
+test('failed reads keep actual timing and optional timing storage failure cannot replay or fail a successful read',async t=>{
+ const failed=await setup(t,{fail:true});await failed.app.tick();const job=failed.app.store.getJob(failed.job.id);assert.equal(job.state,'failed');assert.ok(job.result.timing.workerElapsedMs>=10);assert.equal(job.result.timing.networkMs,null);assert.equal(failed.calls(),1);
+ const {finishMeasuredRead}=await import('../server/lifecycle/service.mjs');for(const afterCommit of [false,true]){const fault=await setup(t),real=fault.app.store,claimed=real.claimJob({workerId:'fixture',leaseMs:180000});let faults=0,actions=0;const store={...real,finishJob:(id,token,input)=>{if(input.result?.timing){faults++;if(afterCommit)real.finishJob(id,token,input);throw Error('optional metrics storage unavailable');}return real.finishJob(id,token,input);}};const result=await (async()=>{actions++;return {state:'ok'};})();finishMeasuredRead(store,claimed,{state:'completed',result},{startedAt:claimed.updatedAt,endedAt:claimed.updatedAt,elapsedMs:0});assert.equal(real.getJob(claimed.id).state,'completed');assert.equal(faults,1);assert.equal(actions,1);}
+});

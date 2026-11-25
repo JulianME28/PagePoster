@@ -1,1 +1,7 @@
-{"name":"pageposter-desktop","productName":"PagePoster","version":"1.0.0","private":true,"main":"main.cjs"}
+{
+  "name": "pageposter-desktop",
+  "productName": "PagePoster",
+  "version": "1.1.0",
+  "private": true,
+  "main": "main.cjs"
+}

@@ -18,6 +18,8 @@ import {validatePublicUrl} from './network.mjs';
 import {prepareCustomerHtml} from './customer-html.mjs';
 import {describeSiteSelection} from './site-selection.mjs';
 import {unusedDonorReservation} from './donor-reservations.mjs';
+import {donorDomainKey} from './donor-domain.mjs';
+import {rankDonorRecommendations} from './donor-recommendations.mjs';
 import {allocateDonors} from './donor-allocation.mjs';
 import {createDonorExclusions} from './donor-exclusions.mjs';
 import {createManualExport} from './manual-export.mjs';
@@ -176,7 +178,7 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
  try{const envelope=JSON.parse(await readFile(sourceFile,'utf8'));if(!box)fail('KEY_REQUIRED');sourceConfig=JSON.parse(box.decrypt(SOURCE_ID,envelope).applicationPassword);}catch(e){if(e.code!=='ENOENT')throw e;}
  const allRuns=()=>store.listProjects().flatMap(p=>store.listRecords(p.id,KIND));
  const donorExclusions=masterKey?createDonorExclusions({store,masterKey,clock,allRuns}):null;
- const publicationTurn=createPublicationTurn({store,allRuns,enabled:visibleBrowser?.nativeEditor===true,clock,closeBrowser:id=>visibleBrowser?.reset?.(id),isActive:id=>activeLeases.has(id),manualPublishedReview});publicationTurn.adoptLegacy();
+ const publicationTurn=createPublicationTurn({store,allRuns,enabled:visibleBrowser?.nativeEditor===true,clock,closeBrowser:id=>visibleBrowser?.reset?.(id),hasActivePage,canCloseBrowser:typeof visibleBrowser?.reset==='function',isActive:id=>activeLeases.has(id),manualPublishedReview});publicationTurn.adoptLegacy();
  const get=id=>{const run=store.getRecord(id);if(!run||run.kind!==KIND||run.deletedAt)fail('NOT_FOUND');return run;};
  const update=(id,patch)=>store.atomic(()=>{const run=get(id),lease=activeLeases.get(id);if(lease&&(run.leaseToken!==lease.token||Date.parse(run.leaseUntil)<=clock()))fail('LEASE_CONFLICT');const manual=visibleBrowser?.nativeEditor&&['BROWSER_CAPTCHA_REQUIRED','BROWSER_LOGIN_REQUIRED'].includes(patch.error?.code),destinationChanged=patch.destinationRevision!==undefined&&patch.destinationRevision!==(run.destinationRevision||0)&&!patch.canonicalLogin;const saved=store.updateRecord(id,{...(destinationChanged?{publicationRecovery:null,publicationEvidence:null,publicationCapabilities:null,capabilityHistoryId:null,capabilityAccountRef:null,publicationCheckedJob:null,nativeDispatchNotStarted:null}:{}),...patch,...(manual?{browserWindow:true}:{})},run.revision);return manual?beginManualWait(saved)||saved:saved;});
  const publicationComplete={state:'completed',stage:'completed',error:null,checkJobId:null,candidateCredential:null};
@@ -253,6 +255,7 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
   const destination=manualDestination(body);if(!box)fail('KEY_REQUIRED');
   return store.atomic(()=>{const run=get(id);
    if(!canSetDestination(run,store)||hasActivePage(run.pageId)||body.expectedRevision!==undefined&&body.expectedRevision!==(run.destinationRevision||0))fail('CONFLICT');
+   if(manualOriginReserved(id,destination.baseUrl))fail('SOURCE_RESERVED');
    if(!candidatePolicy({id:'manual:'+id,baseUrl:destination.baseUrl,username:destination.username,password:destination.password},run,{mode:'manual'}).candidate)fail('DONOR_POLICY_BLOCKED');
    const page=store.getPage(run.pageId),previousTarget=run.candidate?.baseUrl||run.manualTarget?.baseUrl;
    if(page.siteId)store.updatePage(page.id,{siteId:null,lifecycleState:'draft'},page.revision);
@@ -325,10 +328,19 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
   const {decision,candidate}=candidatePolicy({...run.candidate,username:credentials.username,password:credentials.applicationPassword},run);
   if(!candidate){const type=decision?.reasons?.[0]?.type;fail(type==='manual'?'DONOR_MANUALLY_BLOCKED':'DONOR_POLICY_BLOCKED');}
  }
- function manualOriginReserved(id,base){const origin=new URL(base).origin;return allRuns().some(other=>other.id!==id&&other.candidate&&other.state!=='completed'&&donorOrigins(other,other.candidate.baseUrl).includes(origin));}
+ const liveReservationRun=run=>!run.deletedAt&&run.state!=='deleted';
+ function manualOriginReserved(id,base){
+  const root=donorDomainKey(base);
+  return allRuns().some(other=>{
+   const target=other.candidate?.baseUrl||other.manualTarget?.baseUrl;
+   return other.id!==id&&liveReservationRun(other)&&target&&other.state!=='completed'&&donorOrigins(other,target).some(origin=>donorDomainKey(origin)===root);
+  });
+ }
  function sourceOptions(criteria,excludeId,{includeRejected=true}={}){
-  const projects=store.listProjects(),archived=new Set(projects.filter(p=>p.archived).map(p=>p.id)),all=allRuns(),runs=all.filter(r=>r.id!==excludeId&&r.candidate&&!(archived.has(r.projectId)&&unusedDonorReservation(r,store,clock()))),engine=includeRejected?donorExclusions?.snapshot():null,rejected=includeRejected?all.flatMap(r=>(r.donorSkips||[]).filter(skip=>{if(r.id===excludeId)return true;if(skip.policyId)return false;try{return !engine||engine.evaluate({runId:excludeId,origin:skip.baseUrl,origins:donorOrigins(skip,skip.baseUrl),sourceIdentity:policySource(),mode:'automatic'}).blocked;}catch{return true;}})):[],publishedIds=new Set(typeof store.listPublishedSiteIds==='function'?store.listPublishedSiteIds():projects.flatMap(p=>store.listPages(p.id)).filter(page=>page.wpId).map(page=>page.siteId)),publishedSites=store.listAllSites().filter(s=>publishedIds.has(s.id));
-  const unavailability={reservedOrigins:runs.flatMap(r=>donorOrigins(r,r.candidate.baseUrl)),reservedRowIds:runs.map(r=>r.candidate.id),publishedOrigins:publishedSites.map(s=>new URL(s.baseUrl).origin),excludedOrigins:rejected.flatMap(s=>donorOrigins(s,s.baseUrl)),excludedRowIds:rejected.map(s=>s.id)};
+  const projects=store.listProjects(),archived=new Set(projects.filter(p=>p.archived).map(p=>p.id)),all=allRuns().filter(liveReservationRun);
+  const runs=all.filter(r=>r.id!==excludeId&&(r.candidate||r.manualTarget?.baseUrl&&r.state!=='completed')&&!(archived.has(r.projectId)&&unusedDonorReservation(r,store,clock())));
+  const engine=includeRejected?donorExclusions?.snapshot():null,rejected=includeRejected?all.flatMap(r=>(r.donorSkips||[]).filter(skip=>{if(r.id===excludeId)return true;if(skip.policyId)return false;try{return !engine||engine.evaluate({runId:excludeId,origin:skip.baseUrl,origins:donorOrigins(skip,skip.baseUrl),sourceIdentity:policySource(),mode:'automatic'}).blocked;}catch{return true;}})):[],publishedIds=new Set(typeof store.listPublishedSiteIds==='function'?store.listPublishedSiteIds():projects.flatMap(p=>store.listPages(p.id)).filter(page=>page.wpId).map(page=>page.siteId)),publishedSites=store.listAllSites().filter(s=>publishedIds.has(s.id));
+  const unavailability={reservedOrigins:runs.flatMap(r=>donorOrigins(r,r.candidate?.baseUrl||r.manualTarget.baseUrl)),reservedRowIds:runs.flatMap(r=>r.candidate?[r.candidate.id]:[]),publishedOrigins:publishedSites.map(s=>new URL(s.baseUrl).origin),excludedOrigins:rejected.flatMap(s=>donorOrigins(s,s.baseUrl)),excludedRowIds:rejected.map(s=>s.id)};
   return {criteria:normalizeSiteCriteria(criteria),usedOrigins:[...new Set([...unavailability.reservedOrigins,...unavailability.publishedOrigins,...unavailability.excludedOrigins])],usedRowIds:[...unavailability.reservedRowIds,...unavailability.excludedRowIds],unavailability};
  }
  let selectionTask=null,selectionCache=null,selectionEpoch=0,catalogReadTask=null;const donorChoices=new Map();
@@ -347,7 +359,7 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
   if(run.donorSkips?.length&&cached?.config===config&&cached.account===connection.account&&cached.expires>clock()&&sameDonorConnection(connection)){
    const identity=policySource(cached.sourceIdentity),engine=donorExclusions?.snapshot();
    for(const candidate of cached.candidates){
-    if(!matchesRequestedDonor(candidate,run)||ids.has(candidate.id)||origins.has(new URL(candidate.baseUrl).origin)||!matchesSelection(candidate,options.criteria))continue;
+    if(!matchesRequestedDonor(candidate,run)||ids.has(candidate.id)||[...origins].some(value=>donorDomainKey(value)===donorDomainKey(candidate.baseUrl))||!matchesSelection(candidate,options.criteria))continue;
     const permitted=candidatePolicy(candidate,run,{engine,sourceIdentity:identity}).candidate;
     if(permitted){candidateSourceIdentities.set(permitted,identity);return permitted;}
    }
@@ -357,7 +369,7 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
   for(let scanned=0;scanned<10000;scanned++){
    let descriptor;const candidate=await readSource('pickUnused',config,{...options,usedRowIds:[...ids],usedOrigins:[...origins],onSourceIdentity:value=>{descriptor=value;}});
    if(!sameDonorConnection(connection))fail('CONFLICT');if(!candidate)return null;
-   const origin=validatePublicUrl(candidate.baseUrl).origin;if(options.usedRowIds.includes(candidate.id)||options.usedOrigins.includes(origin))fail('SOURCE_RESERVED');if(ids.has(candidate.id)||origins.has(origin))fail('SOURCE_POLICY_SCAN_LIMIT');
+   const origin=validatePublicUrl(candidate.baseUrl).origin;if(options.usedRowIds.includes(candidate.id)||options.usedOrigins.some(value=>donorDomainKey(value)===donorDomainKey(origin)))fail('SOURCE_RESERVED');if(ids.has(candidate.id)||origins.has(origin))fail('SOURCE_POLICY_SCAN_LIMIT');
    const identity=policySource(descriptor),permitted=matchesRequestedDonor(candidate,run)&&matchesSelection(candidate,options.criteria)?candidatePolicy(candidate,run,{sourceIdentity:identity}).candidate:null;
    if(permitted){candidateSourceIdentities.set(permitted,identity);return permitted;}ids.add(candidate.id);
   }
@@ -378,7 +390,11 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
  }
  function destinationStatus(id){const run=store.getRecord(id);if(!run||run.kind!==KIND||run.deletedAt)return {canSetDestination:false,destinationBlockedReason:'Сторінка недоступна для зміни донора.',destinationRevision:run?.destinationRevision||0,donorPinned:false};const reason=destinationBlockedReason(run,store)||(hasActivePage(run.pageId)?'Дочекайтеся завершення поточної дії зі сторінкою.':'');return {canSetDestination:!reason,destinationBlockedReason:reason,destinationRevision:run.destinationRevision||0,donorPinned:run.donorPinned===true};}
  const cleanDonorMetrics=candidate=>{const metrics=candidate.metrics||{};return {dr:Number.isFinite(metrics.dr)&&metrics.dr>=0&&metrics.dr<=100?metrics.dr:null,traffic:Number.isSafeInteger(metrics.traffic)&&metrics.traffic>=0?metrics.traffic:null,geo:Array.isArray(metrics.geo)?metrics.geo.filter(code=>typeof code==='string'&&/^[A-Z]{2}$/.test(code)).slice(0,250):[]};};
- function donorReservation(run,candidate){const used=sourceOptions(run.siteSelection,run.id,{includeRejected:false});return used.usedRowIds.includes(candidate.id)||used.usedOrigins.includes(new URL(candidate.baseUrl).origin);}
+ function catalogueReservations(criteria,id){
+  const used=sourceOptions(criteria,id,{includeRejected:false});
+  return {roots:new Set(used.usedOrigins.map(donorDomainKey)),ids:new Set(used.usedRowIds)};
+ }
+ function donorReservation(run,candidate){const used=catalogueReservations(run.siteSelection,run.id);return used.ids.has(candidate.id)||used.roots.has(donorDomainKey(candidate.baseUrl));}
  async function listDonors(id,request){
   const run=get(id);
   const params=new URL(request.url).searchParams;
@@ -389,21 +405,27 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
   const stopped=blocked(run);if(stopped)return stopped;
   const revision=run.destinationRevision||0,pageRevision=store.getPage(run.pageId)?.revision,criteria=normalizeSiteCriteria(run.siteSelection),{connection,candidates}=await donorPool();
   const current=get(id),newlyStopped=blocked(current);if(newlyStopped)return newlyStopped;if(!sameDonorConnection(connection)||(current.destinationRevision||0)!==revision||store.getPage(current.pageId)?.revision!==pageRevision||JSON.stringify(normalizeSiteCriteria(current.siteSelection))!==JSON.stringify(criteria))fail('CONFLICT');
-  const reserved=sourceOptions(criteria,id,{includeRejected:false}),usedOrigins=new Set(reserved.usedOrigins),usedIds=new Set(reserved.usedRowIds),rejected=new Set(allRuns().flatMap(r=>(r.donorSkips||[]).flatMap(skip=>donorOrigins(skip,skip.baseUrl)))),engine=donorExclusions?.snapshot();
-  const seen=new Set(),pool=[];
+  const reserved=catalogueReservations(criteria,id),rejected=new Set(allRuns().flatMap(r=>(r.donorSkips||[]).flatMap(skip=>donorOrigins(skip,skip.baseUrl)))),engine=donorExclusions?.snapshot();
+  const seen=new Set(),seenIds=new Set(),pool=[];
   for(const candidate of candidates){
    let url;try{url=validatePublicUrl(candidate.baseUrl);}catch{continue;}
-   if(typeof candidate.id!=='string'||candidate.id.length>500||typeof candidate.username!=='string'||typeof candidate.password!=='string'||!candidate.username||!candidate.password||!showAll&&!matchesSelection(candidate,criteria)||search&&!url.href.toLowerCase().includes(search)||seen.has(url.origin))continue;
-   seen.add(url.origin);pool.push(candidate);
+   if(typeof candidate.id!=='string'||candidate.id.length>500||typeof candidate.username!=='string'||typeof candidate.password!=='string'||!candidate.username||!candidate.password||!showAll&&!matchesSelection(candidate,criteria)||search&&!url.href.toLowerCase().includes(search)||seen.has(url.origin)||seenIds.has(candidate.id))continue;
+   seen.add(url.origin);seenIds.add(candidate.id);pool.push(candidate);
   }
-  const visible=pool.slice(offset,offset+limit),token=randomUUID(),choices=new Map(visible.map(candidate=>[candidate.id,candidate]));
+  const describe=candidate=>{
+   const {candidate:permitted,decision}=candidatePolicy(candidate,current,{mode:'manual',engine}),policyReason=decision?.reasons?.[0],origin=new URL(candidate.baseUrl).origin,available=!!permitted&&!reserved.roots.has(donorDomainKey(candidate.baseUrl))&&!reserved.ids.has(candidate.id),matchesCriteria=matchesSelection(candidate,criteria),warnings=[];
+   if(!matchesCriteria)warnings.push('Поза вимогами GEO, DR або трафіку цієї сторінки. Сайт можна обрати вручну.');if(rejected.has(origin))warnings.push('Попередня спроба на цьому донорі не завершилася; його можна обрати вручну.');
+   return {id:candidate.id,baseUrl:candidate.baseUrl,...cleanDonorMetrics(candidate),available,reason:available?'':!permitted?policyReason?.reason||messages.DONOR_POLICY_BLOCKED:'Донор уже використовується або закріплений за іншою сторінкою.',...(policyReason?{exclusion:{type:policyReason.type,reason:policyReason.reason,expiresAt:policyReason.expiresAt,canRelease:!!policyReason.id&&!policyReason.currentRun}}:{}),current:candidate.id===current.candidate?.id&&candidate.baseUrl===current.candidate?.baseUrl,matchesCriteria,warning:warnings.join(' ')};
+  };
+  const token=randomUUID(),byId=new Map(pool.map(candidate=>[candidate.id,candidate]));
+  const visible=showAll?
+   rankDonorRecommendations(pool.map(candidate=>({...describe(candidate),rowNumber:candidate.rowNumber})),criteria,current.candidate?.baseUrl||current.manualTarget?.baseUrl)
+    .slice(offset,offset+limit).map(({rowNumber,...row})=>row):
+   pool.slice(offset,offset+limit).map(describe);
+  const choices=new Map(visible.map(({id})=>[id,byId.get(id)]));
   for(const [key,value]of donorChoices)if(value.expires<=clock())donorChoices.delete(key);while(donorChoices.size>=64)donorChoices.delete(donorChoices.keys().next().value);
   donorChoices.set(token,{id,revision,pageRevision,criteria:JSON.stringify(criteria),showAll,connection,choices,expires:clock()+300000});
-  return {run:publicRun(current,store),token,destinationRevision:revision,criteria,total:pool.length,offset,limit,candidates:visible.map(candidate=>{
-   const {candidate:permitted,decision}=candidatePolicy(candidate,current,{mode:'manual',engine}),policyReason=decision?.reasons?.[0],origin=new URL(candidate.baseUrl).origin,available=!!permitted&&!usedOrigins.has(origin)&&!usedIds.has(candidate.id),matchesCriteria=matchesSelection(candidate,criteria),warnings=[];
-   if(!matchesCriteria)warnings.push('Поза вимогами GEO, DR або трафіку цієї сторінки.');if(rejected.has(origin))warnings.push('Попередня спроба на цьому донорі не завершилася; його можна обрати вручну.');
-   return {id:candidate.id,baseUrl:candidate.baseUrl,...cleanDonorMetrics(candidate),available,reason:available?'':!permitted?policyReason?.reason||messages.DONOR_POLICY_BLOCKED:'Донор уже використовується або закріплений за іншою сторінкою.',...(policyReason?{exclusion:{type:policyReason.type,reason:policyReason.reason,expiresAt:policyReason.expiresAt,canRelease:!!policyReason.id&&!policyReason.currentRun}}:{}),current:candidate.id===current.candidate?.id&&candidate.baseUrl===current.candidate?.baseUrl,matchesCriteria,warning:warnings.join(' ')};
-  })};
+  return {run:publicRun(current,store),token,destinationRevision:revision,criteria,total:pool.length,offset,limit,candidates:visible};
  }
  async function chooseDonor(id,body){
   fields(body,['token','candidateId','expectedRevision']);if(!box)fail('KEY_REQUIRED');
@@ -429,7 +451,7 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
   return store.atomic(()=>{const run=store.getRecord(original.id);if(!selectionUnchanged(run,original)||hasActivePage(run.pageId))return;
    if(candidate)candidate=matchesRequestedDonor(candidate,run)?candidatePolicy(candidate,run,{sourceIdentity:policySource()}).candidate:null;
    if(!candidate){update(run.id,{state:'needs_attention',error:safeError({code:run.requestedDonor?'IMPORT_DONOR_UNAVAILABLE':'SOURCE_EMPTY'}),selectionDiagnostics:selectionDiagnostics||null});return;}
-   const baseUrl=validatePublicUrl(candidate.baseUrl).href,used=sourceOptions(run.siteSelection,run.id);if(used.usedOrigins.includes(new URL(baseUrl).origin)||used.usedRowIds.includes(candidate.id)){update(run.id,{state:'needs_attention',error:safeError({code:'SOURCE_RESERVED'})});return;}
+   const baseUrl=validatePublicUrl(candidate.baseUrl).href,used=sourceOptions(run.siteSelection,run.id);if(used.usedOrigins.some(value=>donorDomainKey(value)===donorDomainKey(baseUrl))||used.usedRowIds.includes(candidate.id)){update(run.id,{state:'needs_attention',error:safeError({code:'SOURCE_RESERVED'})});return;}
    const raw=candidate.metrics||{},metrics={dr:Number.isFinite(raw.dr)?raw.dr:null,traffic:Number.isSafeInteger(raw.traffic)?raw.traffic:null,geo:Array.isArray(raw.geo)?raw.geo.filter(code=>typeof code==='string'&&/^[A-Z]{2}$/.test(code)):[]};
    update(run.id,{candidate:{id:candidate.id,baseUrl,rowNumber:candidate.rowNumber??null,metrics},candidateSourceIdentity:policySource(),candidateCredential:box.encrypt(run.id,{username:candidate.username,applicationPassword:candidate.password}),manualCredential:null,alternateCredential:candidate.alternateCredentials?box.encrypt(run.id+':alternate',{username:candidate.alternateCredentials.username,applicationPassword:candidate.alternateCredentials.password}):null,donorPinned:!!run.requestedDonor,candidateCredentialIndex:0,candidateCredentialFailures:[],leaseToken:null,leaseOwner:null,leaseUntil:null,state:'awaiting_review',stage:'installing',error:null,selectionDiagnostics:null});
   });
@@ -459,10 +481,10 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
     // Plan the whole current batch before reserving it: a flexible row must not
     // consume the sole suitable origin of another row. Manual choices stay fixed.
     // These are proposals only; each admission below rechecks live ownership.
-    const manualOrigins=allRuns().filter(run=>!run.deletedAt&&run.manualTarget).map(run=>run.manualTarget.baseUrl),policySnapshot=donorExclusions?.snapshot(),policyRuns=new Map(pending.map(run=>[run.id,run]));
+    const policySnapshot=donorExclusions?.snapshot(),policyRuns=new Map(pending.map(run=>[run.id,run]));
     const allocation=candidates?new Map(allocateDonors(pending.filter(original=>{
      const run=store.getRecord(original.id);return !run?.manualTarget&&selectionUnchanged(run,original)&&!hasActivePage(run.pageId);
-    }).map(original=>{const run=store.getRecord(original.id),options=sourceOptions(run.siteSelection,run.id);return {id:run.id,...options};}),candidates,{usedOrigins:manualOrigins,candidateFor:(request,candidate)=>matchesRequestedDonor(candidate,policyRuns.get(request.id))?candidatePolicy(candidate,policyRuns.get(request.id),{engine:policySnapshot,sourceIdentity:policySource()}).candidate:null}).assignments.map(value=>[value.id,value.candidate])):null;
+    }).map(original=>{const run=store.getRecord(original.id),options=sourceOptions(run.siteSelection,run.id);return {id:run.id,...options};}),candidates,{candidateFor:(request,candidate)=>matchesRequestedDonor(candidate,policyRuns.get(request.id))?candidatePolicy(candidate,policyRuns.get(request.id),{engine:policySnapshot,sourceIdentity:policySource()}).candidate:null}).assignments.map(value=>[value.id,value.candidate])):null;
     const missing=[];
     for(const original of pending){
      const run=store.getRecord(original.id);if(!selectionUnchanged(run,original))continue;
@@ -471,7 +493,7 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
      else{if(!canRead||!sameConnection())continue;const options=sourceOptions(run.siteSelection,run.id);
       const usedIds=new Set(options.usedRowIds),usedOrigins=new Set(options.usedOrigins);
       candidate=allocation?allocation.get(run.id):await policyPick(run,config,options);
-      if(candidate&&(usedIds.has(candidate.id)||usedOrigins.has(new URL(candidate.baseUrl).origin)||!matchesSelection(candidate,options.criteria)))candidate=null;
+      if(candidate&&(usedIds.has(candidate.id)||[...usedOrigins].some(value=>donorDomainKey(value)===donorDomainKey(candidate.baseUrl))||!matchesSelection(candidate,options.criteria)))candidate=null;
       if(!sameConnection())return;
       if(!candidate&&candidates){missing.push(original);continue;}
      }reserveForReview(original,candidate,diagnostics);recordSelection(original,candidate?'OK':'UNKNOWN');
@@ -513,6 +535,13 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
   // Never turn it into a fresh native-editor publication.
   if(run.jobId||store.listJobs(run.projectId).some(job=>job.pageId===run.pageId&&job.effect==='write'))fail('NATIVE_LEGACY_PUBLICATION');
   if(run.stage==='publishing'&&run.publicationMode!=='native')fail('NATIVE_LEGACY_PUBLICATION');
+  if(publicationTurn.isParking(run.id))fail('CONFLICT');
+  if(run.publicationParked){
+   if(store.getRecord('queue-control:'+run.projectId)?.paused)fail('CONFLICT');
+   if(run.nativePublication?.phase==='creating'&&!run.nativePublication.postId)fail('NATIVE_RESULT_UNCERTAIN');
+   if(!publicationTurn.claim(run))fail('BROWSER_BUSY');
+   update(run.id,{publicationParked:false});
+  }
   const showBrowser=run.browserMode==='hidden'&&['BROWSER_CAPTCHA_REQUIRED','BROWSER_LOGIN_REQUIRED'].includes(run.error?.code);
   if(showBrowser){
    const owner=publicationTurn.owner();if(owner&&owner.id!==run.id)fail('BROWSER_BUSY');
@@ -526,7 +555,7 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
   if(run.siteId){const site=store.getSite(run.siteId);if(site&&!site.enabled)store.updateSite(site.id,{enabled:true},site.revision);}
   if(!showBrowser&&run.browserWindow&&(!publicationTurn.owner()||publicationTurn.owner().id===run.id)&&!await visibleBrowser.resume?.(run.id))await visibleBrowser.reset(run.id);
   if(run.stage==='checking'&&run.pageId&&!run.nativeCleanup){const page=store.getPage(run.pageId),check=store.enqueueJob({projectId:run.projectId,pageId:page.id,siteId:page.siteId,type:'page_check',payload:{},idempotencyKey:'autopilot-check:'+randomUUID()});update(run.id,{checkJobId:check.id});}
-  const resumed=update(run.id,{state:run.stage==='checking'?'checking':run.stage==='publishing'?'publishing':'queued',error:null,...(showBrowser?{browserMode:'visible',browserWindow:false}:{})});finishManualWait(run.id,run.nativeManualWait);return publicRun(get(resumed.id),store);
+  const resumed=update(run.id,{...(run.publicationParked?{publicationParked:false}:{}),state:run.stage==='checking'?'checking':run.stage==='publishing'?'publishing':'queued',error:null,...(showBrowser?{browserMode:'visible',browserWindow:false}:{})});finishManualWait(run.id,run.nativeManualWait);return publicRun(get(resumed.id),store);
  }
  function nativeGuard(id,snapshot,allowPaused=false,{requireBrowser=true}={}){
   const current=get(id);
@@ -537,7 +566,7 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
   const owned=store.getPage(current.pageId),samePublished=current.publicationMode==='native'&&current.nativePublication?.phase==='published'&&owned?.wpId===current.nativePublication.postId&&owned?.siteId===current.siteId&&owned?.fullUrl===current.nativePublication.url&&owned?.revision===current.nativePublishedRevision;
   // Local bans cannot obstruct reconciliation of an existing remote identity.
   if(!samePublished&&!current.nativePublication&&!current.nativeSnapshot&&!current.siteId&&!current.jobId)selectedPolicyGuard(current);
-  if(!samePublished&&current.candidate&&!current.manualTarget&&sourceOptions(current.siteSelection,current.id,{includeRejected:!current.donorPinned}).usedOrigins.includes(new URL(current.candidate.baseUrl).origin))fail('SOURCE_RESERVED');
+  if(!samePublished&&current.candidate&&!current.manualTarget&&sourceOptions(current.siteSelection,current.id,{includeRejected:!current.donorPinned}).usedOrigins.some(value=>donorDomainKey(value)===donorDomainKey(current.candidate.baseUrl)))fail('SOURCE_RESERVED');
   if(!samePublished&&current.manualTarget&&manualOriginReserved(current.id,current.candidate?.baseUrl||current.manualTarget.baseUrl))fail('SOURCE_RESERVED');
   if(requireBrowser)visibleBrowser.assertOpen(id);
   const latest=preparedSnapshot(current,store);verifyPublicationApproval(current,store,latest);verifyCustomerOutput(current,latest.rendered,latest.page);
@@ -703,7 +732,7 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
    const proof=browser.canonicalLogin,canonical=validatePublicUrl(browser.baseUrl).href;
    if(!proof||proof.baseUrl!==canonical||canonicalLoginProofBase(current.candidate.baseUrl,proof)!==canonical)fail('BROWSER_ORIGIN_BLOCKED');
    if(current.stage!=='installing'||current.nativePublication||current.nativeSnapshot||current.siteId||current.jobId)fail('NATIVE_RESULT_UNCERTAIN');
-   nativeGuard(id);if(current.manualTarget?manualOriginReserved(id,canonical):sourceOptions(current.siteSelection,id,{includeRejected:!current.donorPinned}).usedOrigins.includes(new URL(canonical).origin))fail('SOURCE_RESERVED');
+   nativeGuard(id);if(current.manualTarget?manualOriginReserved(id,canonical):sourceOptions(current.siteSelection,id,{includeRejected:!current.donorPinned}).usedOrigins.some(value=>donorDomainKey(value)===donorDomainKey(canonical)))fail('SOURCE_RESERVED');
    update(id,{candidate:{...current.candidate,baseUrl:canonical},...(current.manualTarget?{manualTarget:{...current.manualTarget,baseUrl:canonical}}:{}),canonicalLogin:{...proof,requestedBaseUrl:current.candidate.baseUrl,baseUrl:canonical},destinationRevision:(current.destinationRevision||0)+1});
    rebindApprovedDestination(id,current.publicationApproval,'canonical-login');return get(id);
   });
@@ -875,7 +904,7 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
   const connection=donorConnection(),choose=()=>{if(run.manualTarget){const credentials=box.decrypt(run.id+':manual',run.manualCredential);return {id:'manual:'+run.id,baseUrl:run.manualTarget.baseUrl,rowNumber:null,username:credentials.username,password:credentials.applicationPassword};}return policyPick(run,sourceConfig,sourceOptions(run.siteSelection,run.id));};
   candidate=visibleBrowser?.nativeEditor===true?await publicationPhase(run.id,'selection',choose):await choose();
   if(!candidate)fail('SOURCE_EMPTY');
-  store.atomic(()=>{const current=get(run.id);verifyPublicationApproval(current,store);if(!current.manualTarget&&!sameDonorConnection(connection))fail('CONFLICT');const identity=candidateSourceIdentities.get(candidate)||policySource(),used=sourceOptions(current.siteSelection,current.id);if(!current.manualTarget&&(used.usedOrigins.includes(new URL(candidate.baseUrl).origin)||used.usedRowIds.includes(candidate.id))||current.manualTarget&&manualOriginReserved(current.id,candidate.baseUrl))fail('SOURCE_RESERVED');candidate=candidatePolicy(candidate,current,{sourceIdentity:identity}).candidate;if(!candidate)fail('DONOR_POLICY_BLOCKED');update(run.id,{candidate:{id:candidate.id,baseUrl:candidate.baseUrl,rowNumber:candidate.rowNumber??null,...(candidate.metrics?{metrics:candidate.metrics}:{})},candidateSourceIdentity:identity,candidateCredential:box.encrypt(run.id,{username:candidate.username,applicationPassword:candidate.password}),manualCredential:null,alternateCredential:candidate.alternateCredentials?box.encrypt(run.id+':alternate',{username:candidate.alternateCredentials.username,applicationPassword:candidate.alternateCredentials.password}):null,donorPinned:false,candidateCredentialIndex:0,candidateCredentialFailures:[],state:'queued',stage:'installing'});if(current.donorSkips?.length)rebindApprovedDestination(run.id,current.publicationApproval);});return;
+  store.atomic(()=>{const current=get(run.id);verifyPublicationApproval(current,store);if(!current.manualTarget&&!sameDonorConnection(connection))fail('CONFLICT');const identity=candidateSourceIdentities.get(candidate)||policySource(),used=sourceOptions(current.siteSelection,current.id);if(!current.manualTarget&&(used.usedOrigins.some(value=>donorDomainKey(value)===donorDomainKey(candidate.baseUrl))||used.usedRowIds.includes(candidate.id))||current.manualTarget&&manualOriginReserved(current.id,candidate.baseUrl))fail('SOURCE_RESERVED');candidate=candidatePolicy(candidate,current,{sourceIdentity:identity}).candidate;if(!candidate)fail('DONOR_POLICY_BLOCKED');update(run.id,{candidate:{id:candidate.id,baseUrl:candidate.baseUrl,rowNumber:candidate.rowNumber??null,...(candidate.metrics?{metrics:candidate.metrics}:{})},candidateSourceIdentity:identity,candidateCredential:box.encrypt(run.id,{username:candidate.username,applicationPassword:candidate.password}),manualCredential:null,alternateCredential:candidate.alternateCredentials?box.encrypt(run.id+':alternate',{username:candidate.alternateCredentials.username,applicationPassword:candidate.alternateCredentials.password}):null,donorPinned:false,candidateCredentialIndex:0,candidateCredentialFailures:[],state:'queued',stage:'installing'});if(current.donorSkips?.length)rebindApprovedDestination(run.id,current.publicationApproval);});return;
  }
  if(run.stage==='installing'){
   verifyPublicationApproval(get(run.id),store);
@@ -920,7 +949,7 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
    const run=store.atomic(()=>{
     const controls=new Map(store.listProjects().map(p=>[p.id,store.getRecord('queue-control:'+p.id)]));
     const owner=publicationTurn.owner();
-    const eligible=allRuns().filter(r=>['queued','running','publishing','checking'].includes(r.state)&&(!r.browserPreparing||Date.parse(r.browserPreparingUntil)<=clock())&&(!controls.get(r.projectId)?.paused||r.stage==='checking'||store.getProject(r.projectId)?.archived&&r.stage==='publishing'&&!!r.jobId)&&(!store.getProject(r.projectId)?.archived||(visibleBrowser?.nativeEditor!==true||owner?.id===r.id)&&(r.stage==='publishing'&&!!r.jobId||r.stage==='checking'&&!!r.checkJobId))&&(!r.leaseToken||Date.parse(r.leaseUntil)<=clock())&&(lane==='all'||(lane==='generation')===['preparing','generating'].includes(r.stage))&&(!owner||r.id===owner.id||['preparing','generating'].includes(r.stage)));
+    const eligible=allRuns().filter(r=>!r.publicationParked&&['queued','running','publishing','checking'].includes(r.state)&&(!r.browserPreparing||Date.parse(r.browserPreparingUntil)<=clock())&&(!controls.get(r.projectId)?.paused||r.stage==='checking'||store.getProject(r.projectId)?.archived&&r.stage==='publishing'&&!!r.jobId)&&(!store.getProject(r.projectId)?.archived||(visibleBrowser?.nativeEditor!==true||owner?.id===r.id)&&(r.stage==='publishing'&&!!r.jobId||r.stage==='checking'&&!!r.checkJobId))&&(!r.leaseToken||Date.parse(r.leaseUntil)<=clock())&&(lane==='all'||(lane==='generation')===['preparing','generating'].includes(r.stage))&&(!owner||r.id===owner.id||['preparing','generating'].includes(r.stage)));
     eligible.sort((a,b)=>(controls.get(b.projectId)?.priority||0)-(controls.get(a.projectId)?.priority||0)||Number(a.projectId===lastProjects.get(lane))-Number(b.projectId===lastProjects.get(lane))||a.updatedAt.localeCompare(b.updatedAt));
     const current=lane==='publication'&&eligible.find(r=>r.id===publicationCurrent);
     const next=current||eligible[0];if(!next)return null;
@@ -1065,7 +1094,7 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
    try{return json(donorChoice[2]==='donors'?await listDonors(donorChoice[1],request):{run:await chooseDonor(donorChoice[1],await read(request))});}
    catch(error){const code=Object.hasOwn(messages,error?.code)||['NOT_FOUND','DONOR_SELECTION_EXPIRED','GOOGLE_AUTH_REQUIRED'].includes(error?.code)?error.code:'AUTOPILOT_FAILED',friendly=code==='DONOR_SELECTION_EXPIRED'?'Список донорів застарів. Оновіть його й оберіть сайт ще раз.':code==='CONFLICT'?destinationBlockedReason(get(donorChoice[1]),store)||'Сторінка або джерело змінилися. Оновіть список донорів.':safeError({code}).message;return json({code,error:friendly},code==='NOT_FOUND'?404:['CONFLICT','DONOR_SELECTION_EXPIRED','SOURCE_RESERVED','DONOR_POLICY_BLOCKED','DONOR_MANUALLY_BLOCKED'].includes(code)?409:400);}
   }
-  const destination=route.match(/^\/autopilot\/([a-zA-Z0-9-]+)\/destination$/);if(destination&&request.method==='POST'){try{const run=setDestination(destination[1],await read(request));try{await visibleBrowser?.reset(run.id);}finally{const current=store.getRecord(run.id);if(current&&!current.deletedAt)update(run.id,{browserPreparing:false,browserPreparingUntil:null});}return json({run:publicRun(get(run.id),store)});}catch(error){if(error.code==='CONFLICT')return json({code:'DESTINATION_UNAVAILABLE',error:destinationBlockedReason(get(destination[1]),store)||'Сайт уже змінено в іншій вкладці. Оновіть список.'},409);if(error.code==='MANUAL_SITE_INVALID')return json({code:error.code,error:'Укажіть домен WordPress (example.com) або HTTPS-адресу без параметрів, логін і пароль адміністратора.'},400);throw error;}}
+  const destination=route.match(/^\/autopilot\/([a-zA-Z0-9-]+)\/destination$/);if(destination&&request.method==='POST'){try{const run=setDestination(destination[1],await read(request));try{await visibleBrowser?.reset(run.id);}finally{const current=store.getRecord(run.id);if(current&&!current.deletedAt)update(run.id,{browserPreparing:false,browserPreparingUntil:null});}return json({run:publicRun(get(run.id),store)});}catch(error){if(error.code==='CONFLICT')return json({code:'DESTINATION_UNAVAILABLE',error:destinationBlockedReason(get(destination[1]),store)||'Сайт уже змінено в іншій вкладці. Оновіть список.'},409);if(error.code==='SOURCE_RESERVED')return json({code:error.code,error:messages.SOURCE_RESERVED},409);if(error.code==='MANUAL_SITE_INVALID')return json({code:error.code,error:'Укажіть домен WordPress (example.com) або HTTPS-адресу без параметрів, логін і пароль адміністратора.'},400);throw error;}}
   const browserFocus=route.match(/^\/autopilot\/([a-zA-Z0-9-]+)\/browser$/);if(browserFocus&&request.method==='POST'){fields(await read(request),[]);const run=get(browserFocus[1]);if(!visibleBrowser||!run.browserWindow||run.browserMode==='hidden')fail('BROWSER_NOT_OPEN');await visibleBrowser.focus(run.id);return json({opened:true});}
   const deletion=route.match(/^\/autopilot\/([a-zA-Z0-9-]+)\/delete$/);if(deletion&&request.method==='POST'){fields(await read(request),[]);try{return json(await removeWithBrowser(deletion[1]));}catch(error){if(error.code==='CONFLICT')return json({code:'DELETE_UNAVAILABLE',error:'Запуск уже виконується або пов’язаний із публікацією. Оновіть список і дочекайтеся завершення роботи.'},409);throw error;}}
   const launchRoute=route.match(/^\/projects\/([a-zA-Z0-9-]+)\/autopilot$/);if(launchRoute){if(!store.getProject(launchRoute[1]))fail('NOT_FOUND');if(request.method==='GET')return json({runs:store.listRecords(launchRoute[1],KIND).filter(r=>!r.deletedAt).map(r=>publicRun(r,store))});if(request.method==='POST')return json({run:launch(launchRoute[1],await read(request))},202);}

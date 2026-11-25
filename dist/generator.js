@@ -690,7 +690,24 @@
       es:{menu:'Menú',sections:'Secciones de la página',navigation:'Navegación móvil',contents:'Índice'},
       pl:{menu:'Menu',sections:'Sekcje strony',navigation:'Nawigacja mobilna',contents:'Spis treści'},
       de:{menu:'Menü',sections:'Seitenabschnitte',navigation:'Mobile Navigation',contents:'Inhaltsverzeichnis'},
-      fr:{menu:'Menu',sections:'Sections de la page',navigation:'Navigation mobile',contents:'Sommaire'}
+      fr:{menu:'Menu',sections:'Sections de la page',navigation:'Navigation mobile',contents:'Sommaire'},
+      uk:{menu:'Меню',sections:'Розділи сторінки',navigation:'Мобільна навігація',contents:'Зміст'},
+      nl:{menu:'Menu',sections:'Paginaonderdelen',navigation:'Mobiele navigatie',contents:'Inhoudsopgave'},
+      pt:{menu:'Menu',sections:'Secções da página',navigation:'Navegação móvel',contents:'Índice'},
+      it:{menu:'Menu',sections:'Sezioni della pagina',navigation:'Navigazione mobile',contents:'Indice'},
+      sv:{menu:'Meny',sections:'Sidans avsnitt',navigation:'Mobil navigering',contents:'Innehållsförteckning'},
+      no:{menu:'Meny',sections:'Sidedeler',navigation:'Mobilnavigasjon',contents:'Innholdsfortegnelse'},
+      da:{menu:'Menu',sections:'Sidens afsnit',navigation:'Mobilnavigation',contents:'Indholdsfortegnelse'},
+      fi:{menu:'Valikko',sections:'Sivun osiot',navigation:'Mobiilinavigointi',contents:'Sisällysluettelo'},
+      ro:{menu:'Meniu',sections:'Secțiunile paginii',navigation:'Navigare mobilă',contents:'Cuprins'},
+      hu:{menu:'Menü',sections:'Az oldal részei',navigation:'Mobil navigáció',contents:'Tartalomjegyzék'},
+      cs:{menu:'Menu',sections:'Části stránky',navigation:'Mobilní navigace',contents:'Obsah'},
+      sk:{menu:'Menu',sections:'Časti stránky',navigation:'Mobilná navigácia',contents:'Obsah'},
+      el:{menu:'Μενού',sections:'Ενότητες σελίδας',navigation:'Πλοήγηση κινητού',contents:'Περιεχόμενα'},
+      tr:{menu:'Menü',sections:'Sayfa bölümleri',navigation:'Mobil gezinme',contents:'İçindekiler'},
+      id:{menu:'Menu',sections:'Bagian halaman',navigation:'Navigasi seluler',contents:'Daftar isi'},
+      vi:{menu:'Menu',sections:'Các phần của trang',navigation:'Điều hướng di động',contents:'Mục lục'},
+      hi:{menu:'मेन्यू',sections:'पृष्ठ के भाग',navigation:'मोबाइल नेविगेशन',contents:'विषय सूची'}
     };
     return config.editorialFormat && labels[config.language] || labels.en;
   }

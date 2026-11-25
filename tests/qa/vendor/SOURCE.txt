@@ -1,0 +1,22 @@
+Official WordPress 6.2 HTML API source, copied unchanged for local tests.
+Source tag: WordPress/wordpress-develop 6.2
+
+class-wp-html-attribute-token.php
+https://raw.githubusercontent.com/WordPress/wordpress-develop/6.2/src/wp-includes/html-api/class-wp-html-attribute-token.php
+SHA256 616fa6406aa79648db7bec02e7c6914a0baef8270ab259d8a0fb41055b1383e3
+
+class-wp-html-tag-processor.php
+https://raw.githubusercontent.com/WordPress/wordpress-develop/6.2/src/wp-includes/html-api/class-wp-html-tag-processor.php
+SHA256 dd6f4b688e30735bb21a98f982025c52379e538ac1ce041793bd731d747dc375
+
+class-wp-html-text-replacement.php
+https://raw.githubusercontent.com/WordPress/wordpress-develop/6.2/src/wp-includes/html-api/class-wp-html-text-replacement.php
+SHA256 cd3749d246f5ad62e7053596050ab4677a904643f1373114950cdd492b7604f5
+
+class-wp-html-span.php
+https://raw.githubusercontent.com/WordPress/wordpress-develop/6.2/src/wp-includes/html-api/class-wp-html-span.php
+SHA256 5d95020c4aaf69affac7f7dbf8557da4ef486a74d4743fde3c7e703c8a938e0b
+
+LICENSE.txt
+https://raw.githubusercontent.com/WordPress/wordpress-develop/6.2/src/license.txt
+SHA256 a69e2cfb3c447e2a5e273c1e958dbb89082b0d136ad4256a15a5ee75a76d94d8

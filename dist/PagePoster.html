@@ -535,13 +535,11 @@ main:focus { outline: none; }
 .ga-note { margin: 12px 0; padding: 10px 12px; border-radius: 8px; background: #fff; border: 1px solid #cdddf0; color: #4b6486; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .ga-note.error { color: #94442c; background: #fff6ef; border-color: #f0d0be; }
 .ga-setup { margin: 14px 0; font-size: 12px; line-height: 1.7; }
-.ga-setup summary { color: #3766a5; font-weight: 600; cursor: pointer; }
-.ga-setup ol { margin: 12px 0; padding-left: 22px; color: #4a617e; }
-.ga-setup li { margin: 8px 0; }
+.ga-setup p { margin: 0; color: #4a617e; }
 .ga-card a { color: #3164ac; overflow-wrap: anywhere; }
-.ga-setup code { font-size: 11px; overflow-wrap: anywhere; word-break: break-word; }
 .ga-card .ga-file-label { margin: 14px 0 4px; }
 .ga-file-label input { width: 100%; min-width: 0; padding: 8px; background: #fff; font-size: 12px; }
+.ga-setup .ap-button { margin-top: 8px; }
 .ga-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 13px 0 0; }
 .ga-actions .ap-button { white-space: normal; }
 .ga-open-link { display: inline-block; margin-top: 12px; font-size: 12px; font-weight: 600; }
@@ -577,12 +575,12 @@ main:focus { outline: none; }
 <div class="ap-editorial">
 <label class="ap-field">Формат сторінки<select id="ap-editorial-format" name="editorialFormat" aria-describedby="ap-format-help"><option value="article">Стаття</option><option value="guide">Покроковий гайд</option><option value="comparison">Порівняння</option><option value="discussion">Обговорення</option><option value="blog_post">Публікація в блозі</option><option value="faq">Запитання й відповіді</option></select></label>
 <p id="ap-format-help" class="ap-editorial-hint">Пояснення теми, приклади та висновки.</p>
-<label class="ap-field">Мова сторінки<select id="ap-editorial-language" name="editorialLanguage"><option value="en">Англійська</option><option value="es">Іспанська</option><option value="pl">Польська</option><option value="de">Німецька</option><option value="fr">Французька</option></select></label>
+<label class="ap-field">Мова сторінки<select id="ap-editorial-language" name="editorialLanguage"><option value="en">Англійська</option><option value="es">Іспанська</option><option value="pl">Польська</option><option value="de">Німецька</option><option value="fr">Французька</option><option value="uk">Українська</option><option value="nl">Нідерландська</option><option value="pt">Португальська</option><option value="it">Італійська</option><option value="sv">Шведська</option><option value="no">Норвезька</option><option value="da">Данська</option><option value="fi">Фінська</option><option value="ro">Румунська</option><option value="hu">Угорська</option><option value="cs">Чеська</option><option value="sk">Словацька</option><option value="el">Грецька</option><option value="tr">Турецька</option><option value="id">Індонезійська</option><option value="vi">В’єтнамська</option><option value="hi">Гінді</option></select></label>
 <label class="ap-field">Тема<select id="ap-editorial-topic" name="editorialTopic"><option value="casino">Казино</option><option value="sports_betting">Ставки на спорт</option><option value="gambling">Гемблінг</option><option value="slots">Слоти</option><option value="poker">Покер</option><option value="live_casino">Live-казино</option><option value="custom">Власна тема</option></select></label>
 <label id="ap-custom-topic-wrap" class="ap-field" hidden>Про що написати?<textarea id="ap-editorial-custom" name="editorialCustomTopic" rows="3" maxlength="500" disabled placeholder="Наприклад: чим покерні турніри відрізняються від кеш-ігор"></textarea></label>
 <p class="ap-editorial-hint">Увесь текст — вибраною мовою. Тема визначає зміст; посилання й точні анкори зберігаються без перекладу.</p>
 </div>
-<div id="ap-link-rows"></div></fieldset>
+<label class="ap-field">Кількість карток<input id="ap-card-count" name="cardCount" type="number" min="1" max="20" step="1" placeholder="За кількістю пар посилань" aria-describedby="ap-card-count-help"></label><p id="ap-card-count-help" class="ap-fine">Від кількості введених пар до 20. Посилання й анкори повторюються по черзі: наприклад, 2 пари на 10 карток. Порожнє поле — одна картка на пару.</p><div id="ap-link-rows"></div></fieldset>
 <fieldset id="ap-html-inputs" class="ap-input-group" hidden disabled>
 <label class="ap-field">Ваш HTML<textarea name="customerHtml" rows="8" spellcheck="false" placeholder="Вставте готовий HTML повністю"></textarea></label>
 <div class="ap-html-tools"><label class="ap-file-label">HTML або ZIP із ресурсами<input id="ap-html-file" type="file" multiple accept=".html,.htm,.zip,.css,.png,.jpg,.jpeg,.webp,.gif,.woff,.woff2,.ttf,.otf,text/html,application/zip"></label><span id="ap-html-size" class="ap-fine">0 / 500 000 байт</span></div>
@@ -638,7 +636,7 @@ main:focus { outline: none; }
 <div id="ga-service" class="ap-service-account" hidden><p class="ap-fine">Надайте доступ на читання для адреси сервісного акаунта з поля <code>client_email</code>.</p><label class="ap-field">JSON сервісного акаунта<textarea name="serviceAccount" rows="5" spellcheck="false" autocomplete="off" placeholder="Вставте вміст JSON-файла"></textarea></label><p class="ap-fine">При оновленні вже підключеної таблиці можна залишити порожнім.</p></div>
 <section id="ga-user" class="ga-card" aria-label="Робочий акаунт Google">
 <div class="ga-heading"><span class="ga-symbol" aria-hidden="true">G</span><div><h4>Ваш акаунт Google</h4><p id="ga-status" role="status" aria-live="polite">Виберіть акаунт через Google.</p></div></div>
-<p class="ap-fine">Натисніть «Увійти через Google», виберіть потрібний акаунт у Chrome й підтвердьте читання. PagePoster автоматично перевірить вибрану вкладку таблиці.</p>
+<p id="ga-sign-in-help" class="ap-fine" hidden>Натисніть «Увійти через Google», виберіть потрібний акаунт у Chrome й підтвердьте читання. PagePoster автоматично перевірить вибрану вкладку таблиці.</p>
 <p class="ap-fine">Пароль вводиться на сторінці Google. Підключення зберігається на цьому комп’ютері в захищеному вигляді.</p>
 <div id="ga-note" class="ga-note" role="status" aria-live="polite" hidden></div>
 <div class="ga-actions"><button id="ga-connect" class="ap-button ap-primary" type="button" disabled>Увійти через Google</button><button id="ga-cancel" class="ap-button ap-text" type="button" hidden>Скасувати вхід</button><button id="ga-disconnect" class="ap-button ap-text" type="button" hidden>Відключити акаунт</button></div>
@@ -1139,9 +1137,10 @@ main:focus { outline: none; }
     'dr': 'minDr', 'мін. dr': 'minDr', 'трафік': 'minTraffic', 'трафик': 'minTraffic', 'traffic': 'minTraffic',
     'донор':'donor', 'donor domain':'donor', 'сайт розміщення':'donor', 'домен розміщення':'donor',
     'слаг':'slug', 'слагг':'slug', 'url slug':'slug', 'page slug':'slug', 'post_name':'slug',
-    'publication url':'placementUrl', 'url публікації':'placementUrl', 'адреса публікації':'placementUrl', 'url для публікації':'placementUrl'
+    'publication url':'placementUrl', 'url публікації':'placementUrl', 'адреса публікації':'placementUrl', 'url для публікації':'placementUrl',
+    'кількість карток':'cardCount', 'cards':'cardCount', 'offer count':'cardCount'
   }));
-  const knownColumn = /^(?:id|key|title|url(?:[2-9]|1\d|20)?|anchor(?:[2-9]|1\d|20)?|language|geo|mindr|mintraffic|format|topic|customtopic|file|links|html|baseurl|brand|brandurl|chromemode|slug|donor|placementurl)$/i;
+  const knownColumn = /^(?:id|key|title|url(?:[2-9]|1\d|20)?|anchor(?:[2-9]|1\d|20)?|language|geo|mindr|mintraffic|format|topic|customtopic|file|links|html|baseurl|brand|brandurl|chromemode|slug|donor|placementurl|cardcount)$/i;
   const privateHeader = /password|passwd|\bpwd\b|\blogin\b|username|api[\s_-]*key|credential|token|secret|парол|лог[іи]н|hasło|contraseña|passwort|mot de passe/iu;
   const briefFields = new Map(Object.entries({
     page:'page', 'сторінка':'page', 'страница':'page',
@@ -1149,7 +1148,7 @@ main:focus { outline: none; }
     url:'url', anchor:'anchor', language:'language', geo:'geo', file:'file',
     mindr:'minDr', mintraffic:'minTraffic', format:'format', 'формат':'format',
     topic:'topic', 'тема':'topic', customtopic:'customTopic', 'власна тема':'customTopic',
-    baseurl:'baseUrl', 'адреса ресурсів':'baseUrl', slug:'slug', donor:'donor', placementurl:'placementUrl'
+    baseurl:'baseUrl', 'адреса ресурсів':'baseUrl', slug:'slug', donor:'donor', placementurl:'placementUrl', cardcount:'cardCount'
   }));
 
   function decode(bytes) {
@@ -1168,15 +1167,37 @@ main:focus { outline: none; }
     return aliases.get(name) || name;
   }
 
-  async function tablePayload(text, sourceFile, sheet, optional, {mapColumns,hasHtml:packagedHtml=false}={}) {
+  const hasAiColumns = headers => headers.includes('links') || headers.some(name => urlColumn.test(name) && headers.includes('anchor' + name.slice(3)));
+  const hasHtmlColumns = headers => headers.includes('html') || headers.includes('file');
+  const hasPlacementColumns = headers => headers.some(name=>['slug','donor','placementurl'].includes(name.toLowerCase()));
+  const hasMappedContent = (row,headers) => row.some((value,index)=>headers[index]&&value.trim());
+  const likelyTaskName = /(?:^|\/)(?:tasks?|brief|placement|publication-map|manifest|instructions?|інструкц[\p{L}]*)(?:[._ -]|$)/iu;
+  const notesName = /(?:^|\/)(?:notes?|comments?|примітк[аи]|коментарі?)(?:[._ -]|$)/iu;
+  const placementShapeError = 'В архіві є HTML і таблиця. Для зіставлення вкажіть колонку «file» з іменами HTML-файлів.';
+
+  async function tablePayload(text, sourceFile, sheet, optional, {mapColumns,hasHtml:packagedHtml=false,allowUnknown=false,sourceAssets,locations}={}) {
     const parser = root.PagePosterProjectTable;
     // Archive TXT/MD files may contain licenses and notes. Look for a
     // table header before interpreting their prose as quoted CSV cells.
-    const records = parser.read(text, {headerOnly: optional});
+    let records;
+    try {
+      records = parser.read(text, {headerOnly: optional});
+    } catch (error) {
+      if (optional && !likelyTaskName.test(sourceFile) && textBriefExtension.test(sourceFile)) return null;
+      throw error;
+    }
     const labels = (records[0] || []).map(value => value.trim());
     let headers = labels.map(header);
-    if (optional && !headers.some(value => knownColumn.test(value)) && (!mapColumns || labels.length < 2)) return null;
+    const knownShape = hasHtmlColumns(headers) || hasAiColumns(headers);
+    const placement = packagedHtml && hasPlacementColumns(headers);
+    const namedTask = labels.length >= 2 && likelyTaskName.test(sourceFile) && !textBriefExtension.test(sourceFile);
+    const couldReferenceAssets = labels.length >= 2 && sourceAssets?.size && /\.html?(?:["\s,;\t]|$)/i.test(text);
+    const tryUnclassified = !!mapColumns && labels.length >= 2 && (allowUnknown || likelyTaskName.test(sourceFile));
+    if (optional && !knownShape && !placement && !namedTask && !couldReferenceAssets && !tryUnclassified) return null;
     const matrix = optional ? parser.read(text) : records;
+    const referencesAssets = couldReferenceAssets && matrix.slice(1).some(row=>row.some(value=>sourceAssets.has(value.trim())));
+    const probableTask = placement || namedTask || referencesAssets;
+    if (optional && !knownShape && (!probableTask && !tryUnclassified || !matrix.slice(1).some(row=>row.some(value=>value.trim())))) return null;
     let columnMapping;
     if(mapColumns && headers.some(value=>!knownColumn.test(value))){
       const inventory = packagedHtml && headers.includes('file') && /(?:^|\/)(?:publication-map|manifest)\./i.test(sourceFile);
@@ -1187,18 +1208,22 @@ main:focus { outline: none; }
       });
       const proposal = headers.some((value,index)=>!knownColumn.test(value)&&safeLabels[index])?await mapColumns(safeLabels,packagedHtml):headers.map(()=> '');
       if(!Array.isArray(proposal)||proposal.length!==headers.length||proposal.some(field=>typeof field!=='string'||field&&!knownColumn.test(field)))throw Error('API не підтвердив структуру таблиці.');
-      if(proposal.some((field,index)=>!field&&safeLabels[index]&&!knownColumn.test(headers[index])&&!/^(?:notes?|comments?|примітк[аи]|коментарі?|заметки?)$/iu.test(safeLabels[index])))throw Error('API не визначив призначення всіх колонок. Перевірте заголовки таблиці.');
       columnMapping=headers.map((value,index)=>knownColumn.test(value)?value:safeLabels[index]?proposal[index]:'');
+      if (optional && !probableTask && !hasHtmlColumns(columnMapping) && !hasAiColumns(columnMapping)) return null;
+      if(proposal.some((field,index)=>!field&&safeLabels[index]&&!knownColumn.test(headers[index])&&!/^(?:notes?|comments?|примітк[аи]|коментарі?|заметки?)$/iu.test(safeLabels[index])))throw Error('API не визначив призначення всіх колонок. Перевірте заголовки таблиці.');
       if(new Set(columnMapping.filter(Boolean).map(value=>value.toLowerCase())).size!==columnMapping.filter(Boolean).length)throw Error('У таблиці кілька колонок з однаковим призначенням.');
       headers=columnMapping;
     }
-    const hasHtml = headers.includes('html') || headers.includes('file');
-    const hasAi = headers.includes('links') || headers.some(name => urlColumn.test(name) && headers.includes('anchor' + name.slice(3)));
+    const hasHtml = hasHtmlColumns(headers);
+    const hasAi = hasAiColumns(headers);
     if (!hasHtml && !hasAi) {
-      if (optional) return null;
+      if (optional && !probableTask) return null;
+      if (packagedHtml) throw Error(placementShapeError);
       throw Error('У першому рядку таблиці потрібні колонки URL і анкор, HTML або ім’я файлу.');
     }
     if (hasHtml && hasAi) throw Error('Таблиця поєднує завдання для AI та готовий HTML. Розділіть їх на два проєкти.');
+    const sourceLocations = locations?.filter((_,index)=>hasMappedContent(matrix[index+1],headers));
+    if (locations && !sourceLocations.length) return null;
     return {
       type: hasHtml ? 'html' : 'ai',
       sourceFile: sourceFile.split('/').pop(),
@@ -1206,6 +1231,7 @@ main:focus { outline: none; }
       text: columnMapping||labels.every((label,index)=>label===headers[index]) ? text :
         [headers,...matrix.slice(1)].map(row=>row.map(quote).join(',')).join('\n'),
       ...(columnMapping?{columnMapping}:{}),
+      ...(sourceLocations?{sourceLocations}:{}),
       sheet
     };
   }
@@ -1228,6 +1254,60 @@ main:focus { outline: none; }
     return '';
   }).join('');
   const quote = value => '"' + value.replace(/"/g, '""') + '"';
+
+  function serializeTable(rows) {
+    const encoder = new TextEncoder();
+    let total = 0;
+    return rows.map(row => {
+      const line = row.map(quote).join(',');
+      total += encoder.encode(line).length + 1;
+      if (total > maxPackage) throw Error('Таблиця після читання перевищує 20 МБ.');
+      return line;
+    }).join('\n');
+  }
+
+  function mergeTables(tables) {
+    if (tables.length <= 1) return tables[0] || null;
+    const type = tables[0].type;
+    const fileMapped = tables[0].headers.includes('file');
+    if (tables.some(table => table.type !== type || table.headers.includes('file') !== fileMapped)) {
+      throw Error('Кілька таблиць містять несумісні завдання. Розділіть AI, вбудований HTML і зіставлення файлів.');
+    }
+    const headers = [...new Set(tables.flatMap(table => table.headers.filter(Boolean).map(name => name.toLowerCase() === 'id' ? 'key' : name.toLowerCase())))];
+    if (headers.length > 128) throw Error('Кілька таблиць містять понад 128 різних колонок.');
+    const rows = [], sourceLocations = [], seenRows = new Set(), seenKeys = new Set();
+    for (const table of tables) {
+      const names = table.headers.map(name => name.toLowerCase() === 'id' ? 'key' : name.toLowerCase());
+      const named = names.filter(Boolean);
+      if (new Set(named).size !== named.length) throw Error('Кілька колонок мають однакове призначення.');
+      const positions = headers.map(name => names.indexOf(name));
+      const [labels, ...records] = root.PagePosterProjectTable.read(table.text);
+      let rowIndex = 0;
+      for (const [index, row] of records.entries()) {
+        if (!row.some(value => value.trim())) continue;
+        if (row.length > names.length || row.some((value, column) => value.trim() && !names[column] && !table.columnMapping)) {
+          throw Error('Кількість клітинок не збігається із заголовками таблиці.');
+        }
+        if (table.columnMapping && row.some((value, column) => value.trim() && !labels[column]?.trim())) {
+          throw Error('У таблиці є дані без заголовка колонки.');
+        }
+        const values = positions.map(position => row[position] ?? '');
+        if (!values.some(value => value.trim())) continue;
+        const fingerprint = JSON.stringify(values);
+        const key = values[headers.indexOf('key')]?.trim();
+        if (seenRows.has(fingerprint) || key && seenKeys.has(key)) {
+          throw Error('Кілька таблиць містять повторюваний рядок або однаковий ID.');
+        }
+        seenRows.add(fingerprint);
+        if (key) seenKeys.add(key);
+        if (rows.length >= 1000) throw Error('Таблиця має містити до 1000 рядків даних.');
+        rows.push(values);
+        sourceLocations.push(table.sourceLocations?.[rowIndex] || {file:table.sourceFile,row:table.sourceRows?.[rowIndex] ?? index + 2});
+        rowIndex++;
+      }
+    }
+    return {type,headers,text:serializeTable([headers,...rows]),sourceFile:tables[0].sourceFile,sourceLocations};
+  }
 
   function briefField(line) {
     const plain = line.trim().replace(/^(?:#{1,6}|[-*+])\s+/, '');
@@ -1302,54 +1382,114 @@ main:focus { outline: none; }
     return path;
   }
 
-  async function readXlsx(bytes) {
-    const entries = await root.PagePosterHTMLPackage.unpackZip(bytes);
-    const files = new Map(entries.map(entry => [entry.name, entry]));
-    const book = xml(files, 'xl/workbook.xml', 'workbook');
-    const sheets = descendants(book, 'sheet').filter(sheet => !['hidden', 'veryHidden'].includes(sheet.getAttribute('state')));
-    if (sheets.length !== 1) throw Error('Для імпорту XLSX залиште один видимий аркуш із даними або збережіть потрібний аркуш у CSV.');
-    const sheet = sheets[0];
-    const id = Array.from(sheet.attributes).find(attribute => attribute.localName === 'id')?.value;
-    const relations = xml(files, 'xl/_rels/workbook.xml.rels', 'Relationships');
-    const matches = descendants(relations, 'Relationship').filter(relation => relation.getAttribute('Id') === id && relation.getAttribute('Type')?.endsWith('/worksheet') && relation.getAttribute('TargetMode') !== 'External');
-    if (matches.length !== 1) throw Error('Не вдалося визначити аркуш XLSX.');
-    const worksheet = xml(files, sheetPath(matches[0].getAttribute('Target')), 'worksheet');
-    const strings = files.has('xl/sharedStrings.xml') ? descendants(xml(files, 'xl/sharedStrings.xml', 'sst'), 'si').map(richText) : [];
-    const rows = [];
-    for (const row of descendants(worksheet, 'row')) {
-      const number = Number(row.getAttribute('r'));
-      if (!Number.isInteger(number) || number < 1 || number > 1001 || rows[number - 1]) throw Error('XLSX має містити до 1000 рядків даних після заголовка.');
-      const values = [];
+  const cacheFunctions = new Set('ABS AND AVERAGE CONCAT CONCATENATE COUNT COUNTA IF IFERROR INDEX LEFT LEN LOOKUP LOWER MATCH MAX MID MIN MOD NOT OR PROPER REPLACE RIGHT ROUND ROUNDDOWN ROUNDUP SUBSTITUTE SUM TEXT TEXTJOIN TRIM UPPER VALUE VLOOKUP XLOOKUP'.split(' '));
+
+  function readCell(cell, strings, externalLinks) {
+    const type = cell.getAttribute('t') || 'n';
+    const formulas = children(cell, 'f'), cached = children(cell, 'v');
+    const raw = cached[0]?.textContent ?? '';
+    if (type === 'e') throw Error('Замініть помилки та небезпечні формули Excel готовими значеннями перед імпортом.');
+    if (formulas.length) {
+      const formula = formulas[0], text = formula.textContent.replace(/"(?:[^"]|"")*"/g, '""');
+      // Inspect the whole call target so Unicode and qualified names cannot hide an unknown function.
+      const functions = [...text.matchAll(/([^\s+\-*/^&=<>%,;:(){}"]+)\s*\(/gu)].map(match=>match[1].toUpperCase().replace(/^_XLFN\./,''));
+      const scalar = type === 'str' || type === 'b' && /^[01]$/.test(raw) ||
+        type === 'n' && /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/i.test(raw) && Number.isFinite(Number(raw));
+      if (externalLinks || formulas.length !== 1 || cached.length !== 1 || cached[0].children.length || !scalar || !raw ||
+          !text.trim() || /[[\]|]/.test(text) ||
+          functions.some(name => !cacheFunctions.has(name)) || ![null,'normal'].includes(formula.getAttribute('t'))) {
+        throw Error('Замініть формули Excel без надійного збереженого значення готовими значеннями перед імпортом.');
+      }
+    }
+    if (type === 's' && (!/^\d+$/.test(raw) || strings[Number(raw)] === undefined)) throw Error('XLSX містить пошкоджену текстову клітинку.');
+    const inline = children(cell, 'is')[0];
+    return type === 's' ? strings[Number(raw)] : type === 'inlineStr' && inline ? richText(inline) : raw;
+  }
+
+  function worksheetTable(worksheet, strings, externalLinks, allowUnknown,options) {
+    const data = children(worksheet, 'sheetData');
+    if (data.length !== 1) throw Error('XLSX містить некоректний аркуш.');
+    const rowNumber = row => Number(row.getAttribute('r'));
+    const populated = children(data[0], 'row').filter(row => children(row,'c').some(cell =>
+      cell.children.length || cell.getAttribute('t') === 'e'
+    )).sort((a,b)=>rowNumber(a)-rowNumber(b));
+    const possibleHeaders = populated.slice(0,20);
+    const valuesByRow = possibleHeaders.map(row=>children(row,'c').map(cell => {
+        // A formula or Excel error cannot itself identify a project header.
+        if (children(cell,'f').length || cell.getAttribute('t') === 'e') return '';
+        try { return readCell(cell,strings,externalLinks).trim(); } catch { return ''; }
+    }));
+    const recognized = valuesByRow.findIndex(values => {
+      const names = values.map(header);
+      return hasAiColumns(names) || hasHtmlColumns(names) || options?.hasHtml && hasPlacementColumns(names);
+    });
+    const referencesAssets = options?.sourceAssets?.size && valuesByRow.slice(1).some(values=>values.some(value=>options.sourceAssets.has(value)));
+    const headerRow = recognized>=0 ? populated[recognized] : allowUnknown || referencesAssets ? populated[0] : null;
+    if (!headerRow) return null;
+    const projectRows = populated.slice(populated.indexOf(headerRow));
+    const rows = [], physicalRows = [], seen = new Set();
+    let headers;
+    for (const row of projectRows) {
+      const number = rowNumber(row);
+      if (!Number.isInteger(number) || number < 1 || number > 1048576 || seen.has(number) || seen.size >= 1001) {
+        throw Error('XLSX має містити до 1000 рядків даних після заголовка.');
+      }
+      seen.add(number);
+      const sparse = [];
       for (const cell of children(row, 'c')) {
         const address = /^([A-Z]{1,3})([1-9]\d*)$/.exec(cell.getAttribute('r') || '');
         const column = address ? Array.from(address[1]).reduce((result, letter) => result * 26 + letter.charCodeAt(0) - 64, 0) - 1 : -1;
-        if (column < 0 || column >= 128 || Number(address[2]) !== number || values[column] !== undefined) throw Error('XLSX містить некоректні адреси або понад 128 колонок.');
-        const type = cell.getAttribute('t') || 'n';
-        if (children(cell, 'f').length || type === 'e') throw Error('Замініть формули й помилки Excel готовими значеннями перед імпортом.');
-        const raw = children(cell, 'v')[0]?.textContent || '';
-        if (type === 's' && (!/^\d+$/.test(raw) || strings[Number(raw)] === undefined)) throw Error('XLSX містить пошкоджену текстову клітинку.');
-        const inline = children(cell, 'is')[0];
-        values[column] = type === 's' ? strings[Number(raw)] : type === 'inlineStr' && inline ? richText(inline) : raw;
+        if (column < 0 || column >= 128 || Number(address[2]) !== number || sparse[column] !== undefined) throw Error('XLSX містить некоректні адреси або понад 128 колонок.');
+        sparse[column] = readCell(cell,strings,externalLinks);
       }
-      rows[number - 1] = values;
+      const values = Array.from(sparse,value=>value ?? '');
+      if (!headers) {
+        headers=values;
+        rows.push(headers);
+        continue;
+      }
+      if (!values.some(value=>value.trim())) continue;
+      if (values.some((value,column)=>value.trim()&&!headers[column]?.trim())) throw Error('У XLSX є дані в колонках без заголовків.');
+      rows.push(Array.from({length:headers.length},(_,column)=>values[column] ?? ''));
+      physicalRows.push(number);
     }
-    const width = rows[0]?.length || 0;
-    if (!width) throw Error('Перша стрічка аркуша XLSX має містити заголовки.');
-    let total = 0;
-    const encoder = new TextEncoder();
-    const text = Array.from(rows, row => {
-      if (row?.slice(width).some(value => value !== '')) throw Error('У XLSX є дані в колонках без заголовків.');
-      return Array.from({length: width}, (_, column) => {
-        const cell = quote(row?.[column] || '');
-        total += encoder.encode(cell).length + 2;
-        if (total > maxPackage) throw Error('Таблиця після читання перевищує 20 МБ.');
-        return cell;
-      }).join(',');
-    }).join('\r\n');
-    return {text, sheet: sheet.getAttribute('name')};
+    return rows.length > 1 ? {text:serializeTable(rows),physicalRows} : null;
   }
 
-  async function readDocx(bytes,name) {
+  async function readXlsx(bytes, name, optional, options) {
+    const entries = await root.PagePosterHTMLPackage.unpackZip(bytes);
+    const files = new Map(entries.map(entry => [entry.name, entry]));
+    const book = xml(files, 'xl/workbook.xml', 'workbook');
+    const sheets = [...descendants(book,'sheet').entries()].filter(([,sheet])=>!['hidden','veryHidden'].includes(sheet.getAttribute('state')));
+    const relations = descendants(xml(files, 'xl/_rels/workbook.xml.rels', 'Relationships'),'Relationship');
+    const strings = files.has('xl/sharedStrings.xml') ? descendants(xml(files, 'xl/sharedStrings.xml', 'sst'), 'si').map(richText) : [];
+    const externalLinks = descendants(book,'externalReference').length > 0 || [...files.keys()].some(path=>/^xl\/externalLinks\//i.test(path));
+    const tables = [], visited = new Set();
+    for (const [index,sheet] of sheets) {
+      const id = Array.from(sheet.attributes).find(attribute => attribute.localName === 'id')?.value;
+      const matches = relations.filter(relation => relation.getAttribute('Id') === id);
+      if (matches.length !== 1 || matches[0].getAttribute('TargetMode') === 'External') throw Error('Не вдалося визначити аркуш XLSX.');
+      const kind = matches[0].getAttribute('Type') || '';
+      if (kind.endsWith('/chartsheet')) continue;
+      if (!kind.endsWith('/worksheet')) throw Error('Не вдалося визначити аркуш XLSX.');
+      const path = sheetPath(matches[0].getAttribute('Target'));
+      if (visited.has(path)) throw Error('У XLSX повторюється аркуш.');
+      visited.add(path);
+      const worksheet = xml(files,path,'worksheet');
+      const allowUnknown = sheets.length === 1 && (!optional || options?.allowUnknown || likelyTaskName.test(name)) && !!options?.mapColumns;
+      const raw = worksheetTable(worksheet,strings,externalLinks,allowUnknown,options);
+      if (!raw) continue;
+      const file = name.split('/').pop();
+      const locations = raw.physicalRows.map(row=>({file,sheet:index,row}));
+      const table = await tablePayload(raw.text,name,sheet.getAttribute('name'),true,{...options,allowUnknown,locations});
+      if (!table) continue;
+      tables.push(table);
+    }
+    if (!tables.length && !optional) throw Error('У видимих аркушах XLSX немає таблиці завдань з URL і анкорами, HTML або іменами файлів.');
+    return mergeTables(tables);
+  }
+
+  async function readDocx(bytes,name,optional) {
     const entries = await root.PagePosterHTMLPackage.unpackZip(bytes);
     const files = new Map(entries.map(entry => [entry.name, entry]));
     const document = xml(files, 'word/document.xml', 'document', 'DOCX');
@@ -1358,6 +1498,10 @@ main:focus { outline: none; }
     const wordChildren = (element, name) => children(element, name).filter(child => child.namespaceURI === ns);
     const body = wordChildren(document, 'body'), tables = document.getElementsByTagNameNS(ns, 'tbl');
     const shapeError = 'Залиште в DOCX одну звичайну таблицю із заголовками й даними або почніть ТЗ з «Сторінка: назва».';
+    if (optional && body.length === 1 && !tables.length) {
+      const first = wordChildren(body[0],'p').map(node=>descendants(node,'t').map(text=>text.textContent).join('')).find(text=>text.trim());
+      if (!first || briefField(first).key !== 'page') return null;
+    }
     if (body.length !== 1 || tables.length > 1 || tables.length === 1 && tables[0].parentNode !== body[0]) throw Error(shapeError);
     const content = tables[0] || body[0];
     const elements = Array.from(content.getElementsByTagNameNS(ns, '*'));
@@ -1455,7 +1599,10 @@ main:focus { outline: none; }
   }
 
   async function readTable(name, bytes, optional = false, options) {
-    const {text, sheet, brief} = /\.xlsx$/i.test(name) ? await readXlsx(bytes) : /\.docx$/i.test(name) ? await readDocx(bytes,name) : {text: decode(bytes)};
+    if (/\.xlsx$/i.test(name)) return readXlsx(bytes,name,optional,options);
+    const data = /\.docx$/i.test(name) ? await readDocx(bytes,name,optional) : {text: decode(bytes)};
+    if (!data) return null;
+    const {text, sheet, brief} = data;
     if (brief) return brief;
     if (textBriefExtension.test(name)) {
       const labeled = briefPayload(text,name);
@@ -1488,24 +1635,29 @@ main:focus { outline: none; }
     } else throw Error('Підтримуються CSV, TSV, TXT, MD, XLSX, DOCX, HTML, ZIP та RAR.');
 
     const tables = [];
+    const tableNames = new Set();
     const sources = entries.filter(entry => /\.html?$/i.test(entry.name));
     const hasHtml = sources.length>0;
-    for (const entry of entries.filter(entry => tableExtension.test(entry.name) && !/(?:^|\/)readme(?:[._ -]|$)/i.test(entry.name))) {
-      const optional = textBriefExtension.test(entry.name);
-      // A README or other plain text note is not an import table.
-      const candidate = await readTable(entry.name, entry.bytes, optional,{...options,hasHtml});
-      if (candidate) tables.push(candidate);
-      if (tables.length > 1) break;
+    const sourceAssets = new Set(sources.flatMap(({name})=>[name,name.split('/').pop()]));
+    const candidates = entries.filter(entry => tableExtension.test(entry.name) && !/(?:^|\/)readme(?:[._ -]|$)/i.test(entry.name));
+    const structured = candidates.filter(entry=>!textBriefExtension.test(entry.name) && !notesName.test(entry.name));
+    for (const entry of candidates) {
+      const allowUnknown = structured.length===1 && structured[0]===entry;
+      const candidate = await readTable(entry.name, entry.bytes, true,{...options,hasHtml,sourceAssets,allowUnknown});
+      if (!candidate) continue;
+      const basename = candidate.sourceFile.normalize('NFC').toLowerCase();
+      if (tableNames.has(basename)) throw Error('В архіві кілька джерел з однаковою назвою таблиці. Зробіть назви унікальними.');
+      tableNames.add(basename);
+      tables.push(candidate);
     }
-    if (tables.length > 1) throw Error('В архіві кілька таблиць. Залиште одну таблицю завдань або зіставлення HTML.');
-    const table = tables[0] || null;
+    const table = mergeTables(tables);
     if (!hasHtml) {
       if (table && !table.headers.includes('file')) return table;
       throw Error('В архіві немає HTML-сторінок або самодостатньої таблиці завдань.');
     }
-    if (table && !table.headers.includes('file')) throw Error('В архіві є HTML і таблиця. Для зіставлення вкажіть колонку «file» з іменами HTML-файлів.');
+    if (table && !table.headers.includes('file')) throw Error(placementShapeError);
     let selected = sources;
-    if (table && options?.mapColumns) {
+    if (table) {
       const column = table.headers.indexOf('file');
       const names = new Map();
       for (const source of sources) {
@@ -1515,10 +1667,12 @@ main:focus { outline: none; }
       }
       const included = new Set();
       const rows = root.PagePosterProjectTable.read(table.text).slice(1);
+      let taskIndex = 0;
       for (const [index, row] of rows.entries()) {
-        if (!row.some(value => value.trim())) continue;
+        if (!hasMappedContent(row,table.headers)) continue;
         const source = names.get(row[column]?.trim());
-        const number = table.sourceRows?.[index] ?? index + 2;
+        const number = table.sourceLocations?.[taskIndex]?.row ?? table.sourceRows?.[taskIndex] ?? index + 2;
+        taskIndex++;
         if (!source || included.has(source)) {
           throw Error('Таблиця: рядок ' + number + '. HTML-файл відсутній, повторюється або вказаний неоднозначно.');
         }
@@ -1528,12 +1682,30 @@ main:focus { outline: none; }
     }
     const prepared = await root.PagePosterHTMLPackage.prepareArchiveFiles(entries, selected);
     return {...table, type: 'html', files: prepared.map(({name, html},index) => ({
-      name,html,...(options?.mapColumns&&selected[index].name!==name?{path:selected[index].name}:{})
+      name,html,...(table&&selected[index].name!==name?{path:selected[index].name}:{})
     }))};
   }
 
   root.PagePosterProjectNormalizer = Object.freeze({normalize});
 }(globalThis));
+</script>
+<script>(function(root){
+ 'use strict';
+ const languages=Object.freeze({
+  en:['English','Англійська','Visit casino','View website'],es:['Spanish','Іспанська','Visitar casino','Ver sitio web'],pl:['Polish','Польська','Odwiedź kasyno','Zobacz stronę'],de:['German','Німецька','Casino besuchen','Website öffnen'],fr:['French','Французька','Visiter le casino','Voir le site'],
+  uk:['Ukrainian','Українська','Відвідати казино','Переглянути сайт'],nl:['Dutch','Нідерландська','Bezoek casino','Bekijk website'],pt:['Portuguese','Португальська','Visitar casino','Ver site'],it:['Italian','Італійська','Visita il casinò','Visita il sito'],sv:['Swedish','Шведська','Besök casino','Visa webbplats'],no:['Norwegian','Норвезька','Besøk kasino','Vis nettsted'],da:['Danish','Данська','Besøg casino','Se hjemmeside'],fi:['Finnish','Фінська','Vieraile kasinolla','Näytä verkkosivusto'],ro:['Romanian','Румунська','Vizitează cazinoul','Vezi site-ul'],hu:['Hungarian','Угорська','Kaszinó megtekintése','Weboldal megtekintése'],cs:['Czech','Чеська','Navštívit kasino','Zobrazit web'],sk:['Slovak','Словацька','Navštíviť kasíno','Zobraziť web'],el:['Greek','Грецька','Επίσκεψη στο καζίνο','Προβολή ιστοτόπου'],tr:['Turkish','Турецька','Kasinoyu ziyaret et','Web sitesini görüntüle'],id:['Indonesian','Індонезійська','Kunjungi kasino','Lihat situs web'],vi:['Vietnamese','В’єтнамська','Truy cập sòng bạc','Xem trang web'],hi:['Hindi','Гінді','कैसीनो पर जाएँ','वेबसाइट देखें']
+ });
+ function expandGenerationLinks(links,cardCount){
+  const invalid=()=>{throw Object.assign(Error('Кількість карток має бути цілим числом від кількості пар посилань до 20.'),{code:'VALIDATION'});};
+  if(!Array.isArray(links)||!links.length||links.length>20||links.some(pair=>!pair||typeof pair.url!=='string'||typeof pair.anchor!=='string'))invalid();
+  const count=cardCount===undefined?links.length:cardCount;
+  if(!Number.isSafeInteger(count)||count<links.length||count>20)invalid();
+  return Array.from({length:count},(_,index)=>({...links[index%links.length]}));
+ }
+ const api=Object.freeze({languages,expandGenerationLinks});
+ if(typeof module==='object'&&module.exports)module.exports=api;
+ if(root)root.PagePosterGenerationOptions=api;
+})(typeof globalThis==='object'?globalThis:this);
 </script>
 <script>(function(){
 'use strict';
@@ -1568,7 +1740,7 @@ function pendingKey(){return 'pageposter-autopilot-launch:'+state.selected+':'+s
  }
  function portableDraft(project){
   const result={mode:project.mode==='html'?'html':'ai'},mode=value=>value==='overlay-only'?'overlay-only':'custom',value=input=>typeof input==='string'?input:'';
-  if(project.ai&&Array.isArray(project.ai.links))result.ai={links:project.ai.links.filter(pair=>pair&&typeof pair==='object').map(pair=>({url:value(pair.url),anchor:value(pair.anchor)})),chromeMode:mode(project.ai.chromeMode),editorial:cleanEditorial(project.ai.editorial)};
+  if(project.ai&&Array.isArray(project.ai.links))result.ai={links:project.ai.links.filter(pair=>pair&&typeof pair==='object').map(pair=>({url:value(pair.url),anchor:value(pair.anchor)})),chromeMode:mode(project.ai.chromeMode),editorial:cleanEditorial(project.ai.editorial),...(Number.isSafeInteger(project.ai.cardCount)&&project.ai.cardCount>=1&&project.ai.cardCount<=20?{cardCount:project.ai.cardCount}:{})};
   if(project.html&&typeof project.html==='object')result.html={source:'html',html:value(project.html.html),baseUrl:value(project.html.baseUrl),brand:value(project.html.brand),brandUrl:value(project.html.brandUrl),chromeMode:mode(project.html.chromeMode)};
   return result;
  }
@@ -1600,7 +1772,7 @@ function pendingKey(){return 'pageposter-autopilot-launch:'+state.selected+':'+s
   return true;
  }
 const editorialFormats={article:'Пояснення теми, приклади та висновки.',guide:'Послідовні кроки: що робити, навіщо та на конкретному прикладі.',comparison:'Зіставлення підходів за спільними критеріями, таблиця й відмінності.',discussion:'Різні позиції, аргументи й висновок. Без вигаданих учасників.',blog_post:'Один цікавий ракурс, короткі розділи й головний висновок.',faq:'Спочатку прямі відповіді на запитання, потім докладні пояснення.'};
-function cleanEditorial(value){return {format:Object.hasOwn(editorialFormats,value?.format)?value.format:'article',topic:['casino','sports_betting','gambling','slots','poker','live_casino','custom'].includes(value?.topic)?value.topic:'casino',customTopic:typeof value?.customTopic==='string'?value.customTopic.slice(0,500):'',language:['en','es','pl','de','fr'].includes(value?.language)?value.language:'en'};}
+function cleanEditorial(value){return {format:Object.hasOwn(editorialFormats,value?.format)?value.format:'article',topic:['casino','sports_betting','gambling','slots','poker','live_casino','custom'].includes(value?.topic)?value.topic:'casino',customTopic:typeof value?.customTopic==='string'?value.customTopic.slice(0,500):'',language:Object.hasOwn(window.PagePosterGenerationOptions.languages,value?.language)?value.language:'en'};}
 function editorialValues(){return {language:$('ap-editorial-language').value,format:$('ap-editorial-format').value,topic:$('ap-editorial-topic').value,customTopic:$('ap-editorial-topic').value==='custom'?$('ap-editorial-custom').value.trim():''};}
 function updateEditorial(){const custom=$('ap-editorial-topic').value==='custom';$('ap-custom-topic-wrap').hidden=!custom;$('ap-editorial-custom').disabled=!custom;$('ap-editorial-custom').required=custom;$('ap-format-help').textContent=editorialFormats[$('ap-editorial-format').value];}
 function restoreEditorial(value){const data=cleanEditorial(value);$('ap-editorial-format').value=data.format;$('ap-editorial-language').value=data.language;$('ap-editorial-topic').value=data.topic;$('ap-editorial-custom').value=data.customTopic;updateEditorial();}
@@ -1608,12 +1780,12 @@ function chromeMode(){return document.querySelector('[name=chromeMode]:checked')
 function htmlValues(){const form=$('ap-launch-form');return {source:'html',html:form.elements.customerHtml.value,baseUrl:form.elements.htmlBaseUrl.value.trim(),brand:form.elements.htmlBrand.value,brandUrl:form.elements.htmlBrandUrl.value.trim(),chromeMode:chromeMode()};}
 function htmlError(data=htmlValues()){if(!data.html.trim())return 'Вставте HTML або виберіть файл.';if(new TextEncoder().encode(data.html).byteLength>htmlLimit)return htmlLimitMessage;if(data.baseUrl&&!safeUrl(data.baseUrl))return 'Укажіть повну адресу вихідної сторінки з http або https.';if(data.brandUrl&&!safeUrl(data.brandUrl))return 'Укажіть повне посилання бренду з http або https.';return '';}
 function currentReview(){return state.review?.fingerprint===JSON.stringify(htmlValues())?state.review:null;}
-function saveDraft(){if(!state.selected)return;const project=state.drafts.get(state.selected)||{};project.mode=state.mode;project[state.mode]=state.mode==='ai'?{links:Array.from($('ap-link-rows').children).map(row=>({url:row.querySelector('[name=linkUrl]').value,anchor:row.querySelector('[name=linkAnchor]').value})),chromeMode:chromeMode(),editorial:editorialValues()}:{...htmlValues(),review:state.review};state.drafts.set(state.selected,project);persistWorkspace();}
+function saveDraft(){if(!state.selected)return;const project=state.drafts.get(state.selected)||{};project.mode=state.mode;project[state.mode]=state.mode==='ai'?{links:Array.from($('ap-link-rows').children).map(row=>({url:row.querySelector('[name=linkUrl]').value,anchor:row.querySelector('[name=linkAnchor]').value})),chromeMode:chromeMode(),editorial:editorialValues(),cardCount:($('ap-card-count').value===''?undefined:Number($('ap-card-count').value))}:{...htmlValues(),review:state.review};state.drafts.set(state.selected,project);persistWorkspace();}
 function restoreDraft(){
  const project=state.drafts.get(state.selected)||{},draft=project[state.mode]||{},pending=getPending(),form=$('ap-launch-form');state.review=null;state.previewSerial++;state.fileSerial++;state.previewBusy=false;state.fileBusy=false;
  document.querySelectorAll('[name=contentSource]').forEach(input=>input.checked=input.value===state.mode);
  const data=pending||draft,mode=data.chromeMode||'custom';document.querySelectorAll('[name=chromeMode]').forEach(input=>input.checked=input.value===mode);
- if(state.mode==='ai'){restoreEditorial(data.editorial);clear($('ap-link-rows'));(data.links?.length?data.links:[{url:'',anchor:''}]).forEach(pair=>addLink(pair.url,pair.anchor));}
+ if(state.mode==='ai'){$('ap-card-count').value=Number.isSafeInteger(data.cardCount)?String(data.cardCount):'';restoreEditorial(data.editorial);clear($('ap-link-rows'));(data.links?.length?data.links:[{url:'',anchor:''}]).forEach(pair=>addLink(pair.url,pair.anchor));}
  else{form.elements.customerHtml.value=data.html||'';form.elements.htmlBaseUrl.value=data.baseUrl||'';form.elements.htmlBrand.value=data.brand||'';form.elements.htmlBrandUrl.value=data.brandUrl||'';$('ap-html-file').value='';state.review=pending?null:draft.review||null;if(!currentReview()&&pending?.reviewToken){const saved={source:'html',html:pending.html,baseUrl:pending.baseUrl||'',brand:pending.brand||'',brandUrl:pending.brandUrl||'',chromeMode:pending.chromeMode||'custom'};if(JSON.stringify(saved)===JSON.stringify(htmlValues()))state.review={fingerprint:JSON.stringify(saved),token:pending.reviewToken,warnings:[],accepted:true,viewed:true};}}
  $('ap-ai-inputs').hidden=state.mode!=='ai';$('ap-html-inputs').hidden=state.mode!=='html';$('ap-add-link').hidden=state.mode!=='ai';$('ap-html-preview').hidden=true;
  $('ap-launch').textContent='Підготувати й переглянути';$('ap-first-step').textContent='1. Матеріал';
@@ -1879,6 +2051,11 @@ function renderDestinationCandidates(session){
   const countries=Array.isArray(candidate.geo)?candidate.geo.join(', '):candidate.geo,number=value=>Number.isFinite(value)?value.toLocaleString('uk-UA'):'—';
   details.appendChild(el('p','ap-donor-metrics','DR: '+number(candidate.dr)+' · трафік: '+number(candidate.traffic)+' · гео: '+(countries||'—')));
   if(candidate.current)details.appendChild(el('span','ap-donor-status','Поточний донор'));
+  if(candidate.recommendation){
+   const {reason,primary,reserveRank}=candidate.recommendation;
+   const label=primary?'Рекомендований варіант':Number.isSafeInteger(reserveRank)?'Резерв №'+reserveRank:'';
+   details.appendChild(el('p','ap-donor-reason',label?label+' · '+reason:reason));
+  }
   if(candidate.reason||candidate.available!==true)details.appendChild(el('p','ap-donor-reason',candidate.reason||'Донор зараз недоступний.'));
   if(candidate.exclusion)details.appendChild(el('p','ap-donor-reason',exclusionDescription(candidate.exclusion)));
   if(candidate.warning||candidate.matchesCriteria===false)details.appendChild(el('p','ap-donor-warning',candidate.warning||'Сайт поза вимогами цієї сторінки.'));
@@ -2173,7 +2350,7 @@ function renderResults(){
 async function launch(event){
  event.preventDefault();if(state.busy||state.fileBusy||!state.selected)return;if(getPending())restoreDraft();let content;
  if(state.mode==='html'){content=htmlValues();const invalid=htmlError(content),review=currentReview();if(invalid)return showMessage(invalid,true);if(!review?.viewed||(review.warnings.length&&!review.accepted))return showMessage('Перегляньте поточний HTML і підтвердьте зміни перед публікацією.',true);content.reviewToken=review.token;}
- else{const links=Array.from($('ap-link-rows').children).map(row=>({url:row.querySelector('[name=linkUrl]').value.trim(),anchor:row.querySelector('[name=linkAnchor]').value}));if(!links.length||links.some(pair=>!safeUrl(pair.url)||!pair.anchor.trim()))return showMessage('Укажіть повне посилання http/https та анкор у кожному рядку.',true);const editorial=editorialValues();if(editorial.topic==='custom'&&!editorial.customTopic)return showMessage('Введіть власну тему сторінки.',true);content={links,editorial,reviewBeforePublish:true};if(chromeMode()!=='custom')content.chromeMode=chromeMode();}
+ else{let links=Array.from($('ap-link-rows').children).map(row=>({url:row.querySelector('[name=linkUrl]').value.trim(),anchor:row.querySelector('[name=linkAnchor]').value}));if(!links.length||links.some(pair=>!safeUrl(pair.url)||!pair.anchor.trim()))return showMessage('Укажіть повне посилання http/https та анкор у кожному рядку.',true);try{links=window.PagePosterGenerationOptions.expandGenerationLinks(links,($('ap-card-count').value===''?undefined:Number($('ap-card-count').value)));}catch(error){return showMessage(error.message,true);}const editorial=editorialValues();if(editorial.topic==='custom'&&!editorial.customTopic)return showMessage('Введіть власну тему сторінки.',true);content={links,editorial,reviewBeforePublish:true};if(chromeMode()!=='custom')content.chromeMode=chromeMode();}
  const prior=getPending();if(state.pendingReadErrors.has(pendingKey()))return showMessage('Не вдалося прочитати збережений запит. Відновіть доступ до сховища браузера перед запуском.',true);const payload=prior||{idempotencyKey:key(),...content};if(!savePending(payload)){updateStatus();return showMessage('Не вдалося зберегти запит у браузері. Запуск не надіслано. Звільніть сховище й повторіть збережений запит.',true);}saveDraft();
  state.busy=true;updateStatus();showMessage('');const selected=state.selected;if(state.mode==='ai'){clearStage('Готуємо вашу сторінку','ШІ створює тексти й оформлення. Публікація почнеться після вашого підтвердження.');$('ap-stage').dataset.status='loading';}
  try{const result=await request('/projects/'+selected+'/autopilot',payload);if(!result.run?.id)throw Error('Сервер не підтвердив запуск. Повторіть запит із тими самими даними.');savePending(null);if(state.mode==='ai'){state.autoPreviewRun=result.run.id;state.suppressAutoPreview=false;}else if(state.stage?.kind==='draft'){state.stage={...state.stage,kind:'run',runId:result.run.id,run:result.run,reviewToken:null};}state.runs=[result.run,...state.runs.filter(run=>run.id!==result.run.id)];renderResults();syncPreparedPreview();scheduleRefresh();showMessage(state.mode==='ai'?'Підготовку розпочато. Готова сторінка з’явиться в перегляді; публікація чекає вашого рішення.':'Публікацію підтверджено. Наступні кроки виконуватимуться автоматично.');try{await loadResults();}catch{showMessage('Запуск прийнято й збережено. Не вдалося оновити список; перевіряємо зв’язок із сервером.',true);}}
@@ -2619,7 +2796,7 @@ async function init(){
  $('ap-preview').addEventListener('close',()=>{if($('ap-preview').open)return;$('ap-preview-frame').srcdoc='';state.html='';});
  $('ap-settings-open').addEventListener('click',openSettings);$('ap-all').addEventListener('click',()=>selectProject(null));$('ap-add-link').addEventListener('click',()=>{addLink();editableChanged();$('ap-link-rows').lastElementChild.querySelector('input').focus();});$('ap-launch-form').addEventListener('submit',event=>{event.preventDefault();if(state.mode==='html')previewCustomerHtml();else launch(event);});$('ap-retry-launch')?.addEventListener('click',()=>{if(state.busy||!getPending())return;launch({preventDefault(){}});});$('ap-check-pages').addEventListener('click',checkPages);$('ap-download-html').addEventListener('click',downloadHtml);
  document.querySelectorAll('[name=contentSource]').forEach(input=>input.addEventListener('change',()=>switchMode(input.value)));
- ['ap-editorial-format','ap-editorial-topic','ap-editorial-language'].forEach(id=>$(id).addEventListener('change',()=>{updateEditorial();editableChanged();}));
+ ['ap-editorial-format','ap-editorial-topic','ap-editorial-language','ap-card-count'].forEach(id=>$(id).addEventListener('change',()=>{updateEditorial();editableChanged();}));
  $('ap-editorial-custom').addEventListener('input',editableChanged);
  document.querySelectorAll('[name=chromeMode]').forEach(input=>input.addEventListener('change',()=>{if(state.mode==='html')htmlChanged();else editableChanged();}));
  ['customerHtml','htmlBaseUrl','htmlBrand','htmlBrandUrl'].forEach(name=>$('ap-launch-form').elements[name].addEventListener('input',htmlChanged));
@@ -2705,9 +2882,10 @@ const $=id=>document.getElementById(id),api='/api/lifecycle';
 const state={projects:[],overview:null,preview:null,previewSerial:0,inputSerial:0,fileSerial:0,csvSerial:0,files:[],csvText:'',projectFile:null,projectFileSerial:0,projectFileBusy:false,pending:null,previewBusy:false,importBusy:false,queueBusy:false,refreshSerial:0,timer:null,reviews:new Map(),selected:new Set(),review:null,reviewSerial:0,disabled:false,regionEdit:null,projectFilter:'',requirements:null};
 const htmlLanguages={en:'Англійська',es:'Іспанська',pl:'Польська',de:'Німецька',fr:'Французька',hu:'Угорська',pt:'Португальська',it:'Італійська',nl:'Нідерландська',cs:'Чеська',sk:'Словацька',ro:'Румунська',sv:'Шведська',fi:'Фінська',nb:'Норвезька',da:'Данська',el:'Грецька',tr:'Турецька',uk:'Українська',ru:'Російська',ja:'Японська',ko:'Корейська',zh:'Китайська',ar:'Арабська'};
 const countryNames=new Intl.DisplayNames(['uk'],{type:'region'});
+for(const [code,entry]of Object.entries(window.PagePosterGenerationOptions.languages))htmlLanguages[code]=entry[1];
 function languageName(value){return htmlLanguages[value]||value;}
 function countryName(value){if(!value)return 'Без заданого гео';return value.split(',').map(code=>{try{return countryNames.of(code.trim())||code;}catch{return code;}}).join(', ');}
-function languageOptions(select,value,html=true){select.replaceChildren();for(const [code,label] of Object.entries(htmlLanguages)){if(!html&&!['en','es','pl','de','fr'].includes(code))continue;const option=node('option','',label+' ('+code+')');option.value=code;select.appendChild(option);}if(value&&!Array.from(select.options).some(option=>option.value===value)){const option=node('option','',value);option.value=value;select.appendChild(option);}select.value=value||'en';}
+function languageOptions(select,value,html=true){select.replaceChildren();for(const [code,label] of Object.entries(htmlLanguages)){if(!html&&!Object.hasOwn(window.PagePosterGenerationOptions.languages,code))continue;const option=node('option','',label+' ('+code+')');option.value=code;select.appendChild(option);}if(value&&!Array.from(select.options).some(option=>option.value===value)){const option=node('option','',value);option.value=value;select.appendChild(option);}select.value=value||'en';}
 const statuses={running:'В роботі',waiting:'У черзі',queued:'У черзі',generating:'Генерація',preparing:'Підготовка HTML',ready:'Готова до перегляду',awaiting_review:'Готова до перегляду',publishing:'Публікація',checking:'Перевірка',completed:'Опублікована',attention:'Потребує уваги',needs_attention:'Потребує уваги',failed:'Помилка',uncertain:'Потрібна перевірка',waiting_source:'Потрібен сайт',paused:'Призупинена'};
 function node(tag,cls,text){const value=document.createElement(tag);if(cls)value.className=cls;if(text!==undefined)value.textContent=String(text??'');return value;}
 function append(parent,...children){for(const child of children)if(child)parent.appendChild(child);return parent;}
@@ -2826,7 +3004,7 @@ async function readHtmlFiles(){
  }catch(error){if(serial===state.fileSerial){$('pq-files-status').textContent='Файли не завантажені.';note('pq-import-note',errorMessage(error),true);}}
 }
 function projectFileInput(file,result){
- if(file.text){result.text=file.text;result.sourceFile=file.sourceFile;if(file.sourceRows)result.sourceRows=file.sourceRows;if(file.columnMapping)result.columnMapping=file.columnMapping;}
+ if(file.text){result.text=file.text;result.sourceFile=file.sourceFile;if(file.sourceRows)result.sourceRows=file.sourceRows;if(file.sourceLocations)result.sourceLocations=file.sourceLocations;if(file.columnMapping)result.columnMapping=file.columnMapping;}
  if(file.files)result.files=file.files;
  return result;
 }
@@ -3023,7 +3201,7 @@ async function savePublishedReview(decision){
  const approve=$('pq-published-review-approve'),decline=$('pq-published-review-decline');
  approve.disabled=decline.disabled=true;
  try{
-  const result=await request('/project-queue/items/'+encodeURIComponent(item.id)+'/published-review',{decision,expectedPageRevision:item.pageRevision});
+  const result=await request('/project-queue/items/'+encodeURIComponent(item.id)+'/published-review',{decision,expectedPageRevision:item.pageRevision,...(decision==='declined'&&Number.isSafeInteger(item.manualReview?.retryTrashRevision)?{expectedTrashRevision:item.manualReview.retryTrashRevision}:{})});
   await refreshQueues();
   if(dialog.open&&dialog.item===item){
    close(dialog.id);
@@ -3064,7 +3242,7 @@ function rowFor(item,signature){
  const row=node('tr');row.dataset.queueItem=item.id;row.setAttribute('aria-selected',String(state.selected.has(item.id)));const selectCell=node('td'),check=node('input');check.type='checkbox';check.setAttribute('aria-label','Вибрати сторінку '+item.title);check.disabled=state.queueBusy||state.disabled;check.checked=state.selected.has(item.id);check.title='Вибрати для масових дій. Публікація потребує перегляду.';check.addEventListener('change',()=>{if(check.checked)state.selected.add(item.id);else state.selected.delete(item.id);row.setAttribute('aria-selected',String(check.checked));row._pqSignature=rowSignature(item);const section=row.closest('.pq-project');if(section)section._pqSignature=null;renderQueues();});selectCell.appendChild(check);row.appendChild(selectCell);
  const publication=window.PagePosterPublication?.status(item.publication,item.verification),title=node('td'),name=button(item.title||item.key||'Сторінка',()=>reviewItem(item.id),'pq-row-title pq-row-open');append(title,name,node('span','pq-row-key',item.key||''),item.slug?node('span','pq-row-key','Слаг: '+item.slug):null,item.requestedDonor?node('span','pq-row-key','Донор із ТЗ: '+item.requestedDonor):null,provenanceDetails(item.provenance));if(item.error&&!publication?.working)title.appendChild(node('p',item.publication?.state==='manual_action'?'ap-fine pq-manual-notice':'pq-error',typeof item.error==='string'?item.error:item.error.message||item.error.code||'Потрібна увага'));if(item.fullUrl&&!item.manualReview){try{const url=new URL(item.fullUrl);if(['http:','https:'].includes(url.protocol)&&!url.username&&!url.password){const link=node('a','','Відкрити сторінку ↗');link.href=url.href;link.target='_blank';link.rel='noopener noreferrer';title.appendChild(link);}}catch{}}row.appendChild(title);row.appendChild(node('td','',(item.language||'—')+' / '+(Array.isArray(item.geo)?item.geo.join(', '):item.geo||'—')));row.appendChild(selectedSiteCell(item));
  const status=node('td'),problem=!item.manualReview&&!!item.fullUrl&&['problem','unknown'].includes(item.verification?.state),label=manualReviewLabels[item.manualReview?.state]||publication?.label||(problem?'Опублікована · потрібна перевірка':item.state==='awaiting_review'?(item.selectedSite?'Готова до запуску':'Очікує підбору'):statuses[item.state]||item.state||'У черзі');status.appendChild(node('span','pq-state '+(item.manualReview?'publication-'+(item.manualReview.state==='approved'?'good':'warning'):publication?'publication-'+(publication.type||'working'):item.state)+(problem?' attention':''),label));if(item.manualReview?.trashMessage)status.appendChild(node('p','ap-fine',item.manualReview.trashMessage));if(item.pluginFallback&&item.manualReview?.state!=='trashed')status.appendChild(node('p','ap-fine',item.cleanupPhase?'Зламаний вигляд · підтверджуємо кошик':item.manualReview?'Опубліковано без Clean Links':'Без Clean Links · перевірка вигляду'));if(item.publication?.state==='crawl_blocked')status.appendChild(node('p','ap-fine','robots.txt забороняє Googlebot обходити цю сторінку.'));else if(problem&&item.verification?.summary)status.appendChild(node('p','ap-fine',item.verification.summary));const diagnostics=window.PagePosterPublication?.diagnostics(item.publication);if(diagnostics)status.appendChild(diagnostics);row.appendChild(status);
- const actions=node('td'),group=publishedRowActions(item),manual=['BROWSER_CAPTCHA_REQUIRED','BROWSER_LOGIN_REQUIRED'].includes(item.error?.code);if(item.runId||item.pageId){const preview=button(validReview(item)?'Переглянуто ✓':'Перегляд',()=>reviewItem(item.id));preview.dataset.action='preview';preview.disabled=state.disabled||state.queueBusy;group.appendChild(preview);}if(item.canContinueQueue){const advance=button('Залишити й продовжити чергу',()=>queueAction('/project-queue/items/'+encodeURIComponent(item.id)+'/continue-crawl-blocked',{expectedRevision:item.publication.revision}));advance.disabled=state.disabled||state.queueBusy;group.appendChild(advance);}if(item.canRecheckPublished){const recheck=button('Перевірити опубліковану сторінку',()=>queueAction('/autopilot/'+encodeURIComponent(item.runId)+'/reconcile',{expectedRevision:item.publication.revision}));recheck.dataset.action='recheck-published';recheck.disabled=state.disabled||state.queueBusy;group.appendChild(recheck);}else if(!item.manualReview&&item.runId&&item.publication?.canReconcile){const reconcile=button('Звірити стан',()=>window.dispatchEvent(new CustomEvent('pageposter:reconcile-publication',{detail:{run:{id:item.runId,publication:item.publication}}})));reconcile.dataset.action='reconcile';reconcile.disabled=state.disabled||state.queueBusy;group.appendChild(reconcile);}if((!item.publication||window.PagePosterPublication?.canContinue(item.publication))&&item.runId&&(item.canRetry===true||(manual||item.cleanupPhase)&&['needs_attention','uncertain','failed'].includes(item.state)||['failed','attention','needs_attention','waiting_source','paused'].includes(item.state)&&(item.state==='paused'||item.stage!=='publishing'||item.canRetry===true))){const retry=button(manual||item.cleanupPhase?'Продовжити':item.publication?.checkpoint==='draft'?'Продовжити публікацію':'Повторити',()=>queueAction('/project-queue/items/'+encodeURIComponent(item.id)+'/retry',{}));retry.dataset.action='retry';retry.disabled=state.disabled||state.queueBusy;group.appendChild(retry);}if(item.pageId&&item.fullUrl&&(!state.overview.manualPublishedReview||item.verification)){const reports=node('details','ap-link-report-action');reports.appendChild(node('summary','','Звіти'));const report=button('Звіт посилань',()=>window.dispatchEvent(new CustomEvent('pageposter:link-report',{detail:{pageId:item.pageId}})));report.dataset.action='link-report';report.disabled=state.disabled||state.queueBusy;reports.appendChild(report);group.appendChild(reports);}actions.appendChild(group);row.appendChild(actions);row._pqSignature=signature;return row;
+ const actions=node('td'),group=publishedRowActions(item),manual=['BROWSER_CAPTCHA_REQUIRED','BROWSER_LOGIN_REQUIRED'].includes(item.error?.code);if(item.runId||item.pageId){const preview=button(validReview(item)?'Переглянуто ✓':'Перегляд',()=>reviewItem(item.id));preview.dataset.action='preview';preview.disabled=state.disabled||state.queueBusy;group.appendChild(preview);}if(item.publicationParked){const resume=button('Продовжити відкладену сторінку',()=>queueAction('/autopilot/'+encodeURIComponent(item.runId)+'/resume',{}));resume.dataset.action='resume-parked';resume.disabled=state.disabled||state.queueBusy;group.appendChild(resume);}if(item.canPark){const park=button('Відкласти й продовжити чергу',()=>queueAction('/project-queue/items/'+encodeURIComponent(item.id)+'/park',{}));park.dataset.action='park';park.title='Зберегти поточний стан і донора. Повернення до цієї сторінки — окремою дією.';park.disabled=state.disabled||state.queueBusy;group.appendChild(park);}if(item.canContinueQueue){const advance=button('Залишити й продовжити чергу',()=>queueAction('/project-queue/items/'+encodeURIComponent(item.id)+'/continue-crawl-blocked',{expectedRevision:item.publication.revision}));advance.disabled=state.disabled||state.queueBusy;group.appendChild(advance);}if(item.canRecheckPublished){const recheck=button('Перевірити опубліковану сторінку',()=>queueAction('/autopilot/'+encodeURIComponent(item.runId)+'/reconcile',{expectedRevision:item.publication.revision}));recheck.dataset.action='recheck-published';recheck.disabled=state.disabled||state.queueBusy;group.appendChild(recheck);}else if(!item.manualReview&&item.runId&&item.publication?.canReconcile){const reconcile=button('Звірити стан',()=>window.dispatchEvent(new CustomEvent('pageposter:reconcile-publication',{detail:{run:{id:item.runId,publication:item.publication}}})));reconcile.dataset.action='reconcile';reconcile.disabled=state.disabled||state.queueBusy;group.appendChild(reconcile);}if(!item.publicationParked&&(!item.publication||window.PagePosterPublication?.canContinue(item.publication))&&item.runId&&(item.canRetry===true||(manual||item.cleanupPhase)&&['needs_attention','uncertain','failed'].includes(item.state)||['failed','attention','needs_attention','waiting_source','paused'].includes(item.state)&&(item.state==='paused'||item.stage!=='publishing'||item.canRetry===true))){const retry=button(manual||item.cleanupPhase?'Продовжити':item.publication?.checkpoint==='draft'?'Продовжити публікацію':'Повторити',()=>queueAction('/project-queue/items/'+encodeURIComponent(item.id)+'/retry',{}));retry.dataset.action='retry';retry.disabled=state.disabled||state.queueBusy;group.appendChild(retry);}if(item.pageId&&item.fullUrl&&(!state.overview.manualPublishedReview||item.verification)){const reports=node('details','ap-link-report-action');reports.appendChild(node('summary','','Звіти'));const report=button('Звіт посилань',()=>window.dispatchEvent(new CustomEvent('pageposter:link-report',{detail:{pageId:item.pageId}})));report.dataset.action='link-report';report.disabled=state.disabled||state.queueBusy;reports.appendChild(report);group.appendChild(reports);}actions.appendChild(group);row.appendChild(actions);row._pqSignature=signature;return row;
 }
 function rememberFocus(section){const active=document.activeElement;if(!section.contains(active))return null;const row=active.closest('[data-queue-item]'),head=active.closest('thead'),scope=row||head||section.querySelector('.pq-project-heading');if(!scope?.contains(active))return null;return {active,rowId:row?.dataset.queueItem,head:!!head,index:[...scope.querySelectorAll('button,input,select,a,summary')].indexOf(active),label:active.getAttribute('aria-label'),action:active.dataset.action};}
 function restoreFocus(section,saved){if(!saved||saved.active.isConnected)return;const scope=saved.rowId?[...section.querySelectorAll('[data-queue-item]')].find(row=>row.dataset.queueItem===saved.rowId):section.querySelector(saved.head?'thead':'.pq-project-heading'),controls=[...(scope?.querySelectorAll('button,input,select,a,summary')||[])],target=(saved.label&&controls.find(control=>control.getAttribute('aria-label')===saved.label))||(saved.action&&controls.find(control=>control.dataset.action===saved.action))||controls[saved.index];if(target&&!target.disabled)target.focus({preventScroll:true});}
@@ -3296,22 +3474,87 @@ function initialize(){installWorkspace();init();initRegionControls();
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initialize);else initialize();
 })();
 </script>
-<script>/* Ordinary Google OAuth: registration belongs to the app, never to its user. */
+<script>/* Google OAuth with managed or locally configured Desktop app registration. */
 (()=>{
  'use strict';
  const $=id=>document.getElementById(id),dialog=$('ap-settings'),mode=$('ga-mode'),user=$('ga-user'),service=$('ga-service'),status=$('ga-status'),note=$('ga-note'),connect=$('ga-connect'),cancel=$('ga-cancel'),disconnect=$('ga-disconnect'),openLink=$('ga-open-link');
  if(![dialog,mode,user,service,status,note,connect,cancel,disconnect,openLink].every(Boolean))return;
- const errors={KEY_REQUIRED:'Перезапустіть PagePoster, щоб відкрити захищене сховище.',GOOGLE_CLIENT_REQUIRED:'Вхід Google не налаштований у цій збірці PagePoster. Потрібне оновлення застосунку.',GOOGLE_AUTH_REQUIRED:'Увійдіть через Google, щоб продовжити читання таблиці.',GOOGLE_AUTH_FAILED:'Google не завершив вхід. Перевірте повідомлення на сторінці Google.',GOOGLE_AUTH_CANCELLED:'Вхід скасовано. Можна вибрати акаунт ще раз.',GOOGLE_AUTH_TIMEOUT:'Час очікування входу минув. Натисніть «Увійти через Google» ще раз.',source_access_denied:'Акаунт підключено, але Google відмовив у читанні вибраної таблиці. Перевірте, чи на сторінці входу вибрано потрібний акаунт.',SOURCE_NOT_CONFIGURED:'Збережіть посилання на потрібну вкладку таблиці.'};
+ const errors={KEY_REQUIRED:'Перезапустіть PagePoster, щоб відкрити захищене сховище.',GOOGLE_CLIENT_REQUIRED:'Для входу через Google спочатку імпортуйте реєстрацію застосунку.',GOOGLE_CLIENT_INVALID:'Виберіть коректний JSON-файл OAuth-клієнта типу Desktop app.',GOOGLE_AUTH_REQUIRED:'Увійдіть через Google, щоб продовжити читання таблиці.',GOOGLE_AUTH_FAILED:'Google не завершив вхід. Перевірте повідомлення на сторінці Google.',GOOGLE_AUTH_CANCELLED:'Вхід скасовано. Можна вибрати акаунт ще раз.',GOOGLE_AUTH_TIMEOUT:'Час очікування входу минув. Натисніть «Увійти через Google» ще раз.',source_access_denied:'Акаунт підключено, але Google відмовив у читанні вибраної таблиці. Перевірте, чи на сторінці входу вибрано потрібний акаунт.',SOURCE_NOT_CONFIGURED:'Збережіть посилання на потрібну вкладку таблиці.'};
+ const signInHelp=$('ga-sign-in-help');
+ let setup=null;
  let account={clientConfigured:false,connected:false,phase:'idle',email:''},known=false,busy=false,epoch=0,timer=null,reading=null,prepared=null,verification=null,verified='';
  const visible=()=>dialog.open&&mode.value==='user';
  function message(text,error=false){note.textContent=String(text||'').slice(0,500);note.hidden=!text;note.classList.toggle('error',error);}
  function stop(){clearTimeout(timer);timer=null;}
  function clearLink(){openLink.hidden=true;openLink.removeAttribute('href');}
  function changed(){window.dispatchEvent(new CustomEvent('pageposter:google-account-changed'));}
+ async function readRegistration(file){
+  if(file.size>32*1024)throw Error('Розмір JSON-файла має бути до 32 КБ.');
+  let registration;
+  try{registration=JSON.parse(await file.text());}catch{throw Error(errors.GOOGLE_CLIENT_INVALID);}
+  const installed=registration?.installed;
+  const {client_id,client_secret}=installed||{};
+  if(registration?.web||registration?.type==='service_account'||!installed||Array.isArray(installed)||
+    typeof client_id!=='string'||client_id.length>256||!/^[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/.test(client_id)||
+    typeof client_secret!=='string'||!client_secret.length||client_secret.length>4096||/[\u0000-\u0020\u007f]/.test(client_secret)){
+   throw Error(errors.GOOGLE_CLIENT_INVALID);
+  }
+  return {installed:{client_id,client_secret}};
+ }
+ function renderSetup(show){
+  if(!show){
+   if(setup){setup.querySelector('input').value='';setup.remove();setup=null;}
+   return;
+  }
+  if(!setup){
+   setup=document.createElement('div');
+   setup.id='ga-setup';
+   setup.className='ga-setup';
+   setup.innerHTML='<p>Отримайте JSON-файл для вашої реєстрації OAuth-клієнта типу <strong>Desktop app</strong> у відповідального за PagePoster або адміністратора Google Cloud. Для підключення за даними сервісного акаунта виберіть «Сервісний акаунт» вище.</p><label class="ap-field ga-file-label">JSON-файл реєстрації Google<input id="ga-client-file" type="file" accept=".json,application/json"></label><button id="ga-client-import" class="ap-button ap-secondary" type="button" disabled>Імпортувати реєстрацію</button>';
+   const fileInput=setup.querySelector('input'),importButton=setup.querySelector('button');
+   fileInput.addEventListener('change',()=>{importButton.disabled=!fileInput.files.length;message('');});
+   importButton.addEventListener('click',()=>action(async active=>{
+    const file=fileInput.files[0];
+    fileInput.value='';
+    if(!file)return;
+    const client=await readRegistration(file);
+    if(!active())return;
+    try{
+     const result=await request('google/client',{client,expectedUnconfigured:true});
+     if(!active())return;
+     if(result.account?.clientConfigured!==true)throw Error();
+     accept(result.account,true);
+    }catch(error){
+     if(error.code==='CONFLICT'){
+      if(!active())return;
+      try{
+       const result=await request('google/account');
+       if(!active())return;
+       accept(result.account);
+       message(account.clientConfigured?'Вхід через Google уже налаштовано в іншому вікні.':'Інше вікно налаштовує вхід через Google. Відкрийте налаштування ще раз, щоб оновити стан.');
+      }catch{
+       if(!active())return;
+       known=false;
+       message('Не вдалося оновити стан підключення Google. Відкрийте налаштування ще раз.',true);
+      }
+      return;
+     }
+     throw Error(error.code==='KEY_REQUIRED'?errors.KEY_REQUIRED:'Не вдалося зберегти реєстрацію Google. Перевірте файл і спробуйте ще раз.');
+    }
+    message('Реєстрацію збережено. Тепер можна увійти через Google.');
+   }));
+   note.before(setup);
+  }
+  const fileInput=setup.querySelector('input');
+  fileInput.disabled=busy;
+  setup.querySelector('button').disabled=busy||!fileInput.files.length;
+ }
  function render(){
   user.hidden=mode.value!=='user';service.hidden=mode.value!=='service';const input=service.querySelector('[name="serviceAccount"]');if(input)input.disabled=mode.value!=='service';
-  mode.disabled=busy;connect.disabled=busy||!known||account.phase==='waiting';connect.textContent=account.connected?'Вибрати інший акаунт':'Увійти через Google';cancel.hidden=account.phase!=='waiting';cancel.disabled=busy;disconnect.hidden=!account.connected;disconnect.disabled=busy;
-  status.textContent=!known?'Перевіряємо підключення…':account.phase==='waiting'?'Завершіть вхід у Chrome. PagePoster отримає підключення автоматично.':account.connected?'Підключений акаунт: '+(account.email||'Google'):'Натисніть «Увійти через Google» і виберіть акаунт, якому доступна таблиця.';
+  renderSetup(visible()&&known&&!account.clientConfigured);
+  if(signInHelp)signInHelp.hidden=!account.clientConfigured;
+  mode.disabled=busy;connect.disabled=busy||!known||!account.clientConfigured||account.phase==='waiting';connect.textContent=account.connected?'Вибрати інший акаунт':'Увійти через Google';cancel.hidden=account.phase!=='waiting';cancel.disabled=busy;disconnect.hidden=!account.connected;disconnect.disabled=busy;
+  status.textContent=!known?'Перевіряємо підключення…':!account.clientConfigured?errors.GOOGLE_CLIENT_REQUIRED:account.phase==='waiting'?'Завершіть вхід у Chrome. PagePoster отримає підключення автоматично.':account.connected?'Підключений акаунт: '+(account.email||'Google'):'Натисніть «Увійти через Google» і виберіть акаунт, якому доступна таблиця.';
  }
  async function request(path,body){
   const response=await fetch('/api/lifecycle/'+path,{method:body===undefined?'GET':'POST',credentials:'same-origin',headers:{'X-PagePoster-Request':'1',...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});let result;try{result=await response.json();}catch{throw Error('PagePoster не підтвердив відповідь. Відкрийте налаштування ще раз.');}

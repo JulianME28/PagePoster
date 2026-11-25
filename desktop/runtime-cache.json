@@ -3,9 +3,9 @@
   "locks": {
     "runtime-package.json": "b3274312e925fc8bb841d7e5a683dd0dbdea41e8d841b6ef0f6655a56dcfb702",
     "runtime-pnpm-lock.yaml": "9fecfc38cd818c7e22245b7a89d27e0175f7fda7cde45823da65d22ebce263ac",
-    "production-package.json": "42ebdb68c46218c908c02d2173a56ab598e012084fa3cba13ab11e59e1bfd3df",
-    "production-pnpm-lock.yaml": "a2aac07b43d39795ee00958c95b2caa821fd4cb7f6781af1bd1106e3e5cc2d24"
+    "production-package.json": "1a3679cf5fb838114ca84dde12f5e86dbcff2babd723bee35edb15d86be9feff",
+    "production-pnpm-lock.yaml": "97a77eb1d56aecf428a126c88fc7b6a20984068bedf4412e431327933c1e4916"
   },
   "electron": "6a57849c8fe6305e46ea3098881eeb6fac2bc9ff1c6e85bb3c60ae57530777da",
-  "production": "a4a5bfa62c25abe5643ac815a7ace1b0e2e9a7335f1e1df9ee15efe2c1b2382c"
+  "production": "93de9716bd473f744cdfa4dd6d3202a8a108bf1153eba24b63abecb4db3f46d7"
 }

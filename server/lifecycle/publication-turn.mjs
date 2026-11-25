@@ -1,8 +1,8 @@
 const ID='publication-turn:global',KIND='publication_turn';
 // This is a durable workflow turn, not a short worker lease. A failed or manual
 // step still owns it, so releasing a lease cannot advance another publication.
-export function createPublicationTurn({store,allRuns,enabled=true,clock=Date.now,closeBrowser=async()=>{},isActive=()=>false,manualPublishedReview=false}){
- let retiring=null;
+export function createPublicationTurn({store,allRuns,enabled=true,clock=Date.now,closeBrowser=async()=>{},canCloseBrowser=false,hasActivePage=()=>false,isActive=()=>false,manualPublishedReview=false}){
+ let retiring=null,parking=null;
  // Later reviews and monitoring must never reclaim a completed turn.
  function complete(id){if(!enabled)return;store.atomic(()=>{const record=store.getRecord(ID),run=store.getRecord(id);if(record?.runId===id&&!record.releasedAt&&run?.state==='completed')store.updateRecord(ID,{releasedAt:new Date(clock()).toISOString()},record.revision);});}
  function owner(){if(!enabled)return null;const record=store.getRecord(ID);if(!record||record.releasedAt)return null;const trash=record.trashRunId&&store.getRecord(record.trashRunId);if(trash?.kind==='published_trash'&&!trash.deletedAt&&trash.state!=='deleted')return trash;const run=store.getRecord(record.runId);return ['autopilot','native_update','published_trash'].includes(run?.kind)&&!run.deletedAt&&run.state!=='deleted'?run:null;}
@@ -35,7 +35,37 @@ export function createPublicationTurn({store,allRuns,enabled=true,clock=Date.now
    if(current?.browserWindow)store.updateRecord(current.id,{browserWindow:false},current.revision);
   });
  }
+ function canPark(run){
+  const project=run&&store.getProject(run.projectId);
+  if(!enabled||!canCloseBrowser||!project||project.archived||project.trashed||retiring||parking||owner()?.id!==run.id||
+    run.kind!=='autopilot'||(run.publicationMode&&run.publicationMode!=='native')||!['installing','publishing','checking'].includes(run.stage)||
+    !['failed','uncertain','needs_attention'].includes(run.state)||run.publicationParked||isActive(run.id)||hasActivePage(run.pageId)||
+    run.jobId||run.checkJobId||(run.browserPreparing&&!(Date.parse(run.browserPreparingUntil)<=clock()))||
+    (run.leaseToken&&!(Date.parse(run.leaseUntil)<=clock())))return false;
+  return !store.listJobs(run.projectId).some(job=>job.pageId===run.pageId&&job.effect==='write'&&['queued','paused','uncertain','running'].includes(job.state));
+ }
+ async function park(id){
+  const conflict=()=>{throw Object.assign(Error('Стан публікації змінився. Оновіть чергу.'),{code:'CONFLICT'});};
+  const before=store.getRecord(id);if(!before||!canPark(before))conflict();
+  const fence=store.updateRecord(id,{browserPreparing:true,browserPreparingUntil:new Date(clock()+180000).toISOString()},before.revision);
+  parking=id;
+  try{
+   await closeBrowser(id);
+   store.atomic(()=>{
+    const current=store.getRecord(id),turn=store.getRecord(ID);
+    if(current?.revision!==fence.revision||owner()?.id!==id)conflict();
+    parking=null;
+    if(!canPark({...current,browserPreparing:false}))conflict();
+    store.updateRecord(id,{browserPreparing:false,browserPreparingUntil:null,browserWindow:false,publicationParked:true},current.revision);
+    store.updateRecord(ID,{releasedAt:new Date(clock()).toISOString(),releaseReason:'manually_parked'},turn.revision);
+   });
+  }finally{
+   parking=null;const current=store.getRecord(id);
+   if(current?.browserPreparing&&current.browserPreparingUntil===fence.browserPreparingUntil)store.updateRecord(id,{browserPreparing:false,browserPreparingUntil:null},current.revision);
+  }
+ }
  function canRetire(run){
+  if(parking)return false;
   if(run&&run.kind!=='autopilot')return false;
   const project=run&&store.getProject(run.projectId);
   const settling=run&&['publishing','checking'].includes(run.state)&&(run.stage==='publishing'&&run.jobId||run.stage==='checking'&&run.checkJobId);
@@ -59,5 +89,5 @@ export function createPublicationTurn({store,allRuns,enabled=true,clock=Date.now
   const manualMessage=run.browserMode==='hidden'?'Натисніть «Продовжити», щоб відкрити WordPress у видимому вікні та завершити вхід або пройти CAPTCHA. Наступні сторінки чекають.':'Пройдіть CAPTCHA або завершіть вхід у поточному вікні WordPress, потім натисніть «Продовжити». Наступні сторінки чекають.';
   return {runId:run.id,pageId:run.pageId||null,projectId:run.projectId,title:page?.title||run.title||'Поточна сторінка',state:run.state,stage:run.stage,blocked,manual,code:run.error?.code||null,message:manual?manualMessage+(paused?' Проєкт на паузі: перед продовженням відновіть його.':''):paused?'Поточний проєкт на паузі. Наступні сторінки чекають завершення поточної.':blocked?'Поточна сторінка потребує дії. Наступні чекають '+next:'Працює одна сторінка. Наступна почнеться після '+next};
  }
- return {owner,claim,claimTrash,prepareTrash,complete,finishTrash,releaseUnsent,adoptLegacy,status,retireInactive};
+ return {owner,claim,canPark,park,isParking:id=>parking===id,claimTrash,prepareTrash,complete,finishTrash,releaseUnsent,adoptLegacy,status,retireInactive};
 }
