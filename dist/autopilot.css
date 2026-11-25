@@ -231,7 +231,7 @@ h3 { margin: 0 0 5px; font-size: 16px; font-weight: 650; }
 .ap-muted { color: var(--muted); font-size: 13px; }
 .ap-fine { color: #7b889f; font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; }
 .ap-footer { width: 100%; max-width: 1600px; margin: 0 auto; padding: 0 28px 22px; color: #8a96aa; font-size: 11px; line-height: 1.7; }
-.ap-footer span { margin: 0 8px; }
+.ap-footer > span:first-child { margin: 0 8px; }
 
 /* Dialogs and full-size preview */
 .ap-dialog { width: min(720px, calc(100% - 32px)); max-height: 90vh; padding: 28px; overflow-y: auto; border: 1px solid #dce5f3; border-radius: 14px; background: #fff; color: var(--ink); box-shadow: 0 24px 90px #18233826; }
@@ -338,7 +338,6 @@ main:focus { outline: none; }
   .ap-project-list { display: flex; grid-column: 1 / -1; gap: 6px; min-width: 0; min-height: 0; max-width: 100%; padding-bottom: 3px; overflow-x: auto; }
   .ap-project-button { flex: none; width: auto; max-width: 220px; margin: 0; padding: 6px 9px; font-size: 12px; }
   .ap-project-symbol { width: 23px; height: 23px; font-size: 9px; }
-  .ap-mobile-new { display: flex !important; }
   .ap-topbar { min-height: 43px; padding: 9px 16px; }
   .ap-location { font-size: 11px; }
   .ap-runtime { padding: 3px 7px; font-size: 10px; }

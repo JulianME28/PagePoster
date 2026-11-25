@@ -64,6 +64,17 @@ export function createPublicationTurn({store,allRuns,enabled=true,clock=Date.now
    if(current?.browserPreparing&&current.browserPreparingUntil===fence.browserPreparingUntil)store.updateRecord(id,{browserPreparing:false,browserPreparingUntil:null},current.revision);
   }
  }
+ async function releaseParkedReconciliation(id,leaseToken){
+  const run=owner(),turn=store.getRecord(ID);
+  if(!canCloseBrowser||run?.id!==id||!run.publicationParked||!leaseToken||run.leaseToken!==leaseToken)return;
+  await closeBrowser(id);
+  store.atomic(()=>{
+   const current=owner(),currentTurn=store.getRecord(ID);
+   if(current?.id!==id||current.revision!==run.revision||current.leaseToken!==leaseToken||!current.publicationParked||currentTurn?.revision!==turn.revision)return;
+   if(current.browserWindow)store.updateRecord(id,{browserWindow:false},current.revision);
+   store.updateRecord(ID,{releasedAt:new Date(clock()).toISOString(),releaseReason:'parked_reconciliation_finished'},currentTurn.revision);
+  });
+ }
  function canRetire(run){
   if(parking)return false;
   if(run&&run.kind!=='autopilot')return false;
@@ -89,5 +100,5 @@ export function createPublicationTurn({store,allRuns,enabled=true,clock=Date.now
   const manualMessage=run.browserMode==='hidden'?'Натисніть «Продовжити», щоб відкрити WordPress у видимому вікні та завершити вхід або пройти CAPTCHA. Наступні сторінки чекають.':'Пройдіть CAPTCHA або завершіть вхід у поточному вікні WordPress, потім натисніть «Продовжити». Наступні сторінки чекають.';
   return {runId:run.id,pageId:run.pageId||null,projectId:run.projectId,title:page?.title||run.title||'Поточна сторінка',state:run.state,stage:run.stage,blocked,manual,code:run.error?.code||null,message:manual?manualMessage+(paused?' Проєкт на паузі: перед продовженням відновіть його.':''):paused?'Поточний проєкт на паузі. Наступні сторінки чекають завершення поточної.':blocked?'Поточна сторінка потребує дії. Наступні чекають '+next:'Працює одна сторінка. Наступна почнеться після '+next};
  }
- return {owner,claim,canPark,park,isParking:id=>parking===id,claimTrash,prepareTrash,complete,finishTrash,releaseUnsent,adoptLegacy,status,retireInactive};
+ return {owner,claim,canPark,park,releaseParkedReconciliation,isParking:id=>parking===id,claimTrash,prepareTrash,complete,finishTrash,releaseUnsent,adoptLegacy,status,retireInactive};
 }

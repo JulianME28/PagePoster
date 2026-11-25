@@ -2,12 +2,13 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http');
 const playwrightPath=require('./browser-runtime.cjs').playwrightPath,chromePath=require('./browser-runtime.cjs').chromePath;
 const options={timeout:35000,skip:!(fs.existsSync(playwrightPath)&&fs.existsSync(chromePath))};
+function evidenceDir(t){const dir=fs.mkdtempSync(path.join(require('node:os').tmpdir(),'pp-ui-evidence-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));return dir;}
 
 test('explicit parking releases only the chosen row and exposes an explicit resume action',options,async t=>{
  const {page,fixture}=await workspace(t,{desktop:true}),item=fixture.overview.projects[0].items[0];
  Object.assign(item,{state:'needs_attention',stage:'installing',canApprove:false,canPark:true,error:{code:'BROWSER_CAPTCHA_REQUIRED',message:'Потрібна CAPTCHA'}});
  let parked=0,resumed=0;
- await page.route('**/project-queue/items/q1/park',route=>{assert.deepEqual(route.request().postDataJSON(),{});parked++;item.canPark=false;item.publicationParked=true;return route.fulfill({json:{item}});});
+ await page.route('**/project-queue/items/q1/park',route=>{assert.deepEqual(route.request().postDataJSON(),{});parked++;item.canPark=false;item.publicationParked=true;item.canResumeParked=true;return route.fulfill({json:{item}});});
  await page.route('**/autopilot/'+item.runId+'/resume',route=>{assert.deepEqual(route.request().postDataJSON(),{});resumed++;item.publicationParked=false;item.state='queued';return route.fulfill({json:{run:{id:item.runId}}});});
  await refreshWorkspace(page);assert.equal(parked,0);assert.equal(resumed,0);
  await page.locator('[data-queue-item=q1] [data-action=park]').click();await page.locator('[data-queue-item=q1] [data-action=resume-parked]').waitFor();assert.equal(parked,1);assert.equal(resumed,0);assert.equal(await page.locator('[data-queue-item=q1] [data-action=retry]').count(),0);
@@ -85,7 +86,7 @@ test('GEO suggestions include every ISO country from the first letter and keep t
  assert.equal(calls.some(call=>/queue\/start|queue\/approve/.test(call.endpoint)),false);
 });
 test('a manual CAPTCHA owner is named and can continue without approving another queued page',options,async t=>{
- const {page,calls,fixture}=await workspace(t),item=fixture.overview.projects[0].items[0];Object.assign(item,{state:'needs_attention',stage:'publishing',canApprove:false,error:{code:'BROWSER_CAPTCHA_REQUIRED',message:'Пройдіть CAPTCHA у поточному вікні.'}});Object.assign(fixture.overview.projects[0].items[1],{state:'queued',stage:'installing'});
+ const {page,calls,fixture}=await workspace(t),item=fixture.overview.projects[0].items[0];Object.assign(item,{state:'needs_attention',stage:'publishing',canApprove:false,canRetry:true,error:{code:'BROWSER_CAPTCHA_REQUIRED',message:'Пройдіть CAPTCHA у поточному вікні.'}});Object.assign(fixture.overview.projects[0].items[1],{state:'queued',stage:'installing'});
  fixture.overview.publication={active:0,waiting:1,owner:{runId:'r1',title:'Polish page',blocked:true,manual:true,message:'Пройдіть CAPTCHA у поточному вікні WordPress. Наступні сторінки чекають.'}};
  await page.route('**/api/lifecycle/project-queue/items/q1/retry',async route=>{item.state='queued';item.error=null;fixture.overview.publication.owner.blocked=false;fixture.overview.publication.owner.manual=false;await route.fulfill({contentType:'application/json',body:JSON.stringify({item})});});
  await page.locator('#pq-dashboard-open').click();await page.locator('#pq-publication-owner').getByText(/CAPTCHA/).waitFor();assert.match(await page.locator('#pq-publication-owner').textContent(),/Polish page/);
@@ -102,6 +103,15 @@ test('publishing retry is shown only for the server-confirmed safe recovery case
  Object.assign(item,{state:'failed',canRetry:false});await refreshWorkspace(page);await page.locator('[data-queue-item=q1] .pq-state.failed').waitFor();assert.equal(await page.locator('[data-queue-item=q1] [data-action=retry]').count(),0);
 });
 async function refreshWorkspace(page){const menu=page.locator('.pq-workspace-actions > .pq-more');if(!await menu.getAttribute('open'))await menu.locator('summary').click();await page.locator('#pq-refresh').click();}
+test('ordinary retries require the server capability and include failed rows without a run',options,async t=>{
+ const {page,fixture}=await workspace(t,{desktop:true}),project=fixture.overview.projects[0],item=project.items[0];
+ Object.assign(item,{state:'paused',stage:'selecting',canApprove:false,canRetry:false});project.paused=true;
+ await refreshWorkspace(page);assert.equal(await page.locator('[data-queue-item=q1] [data-action=retry]').count(),0);
+ project.paused=false;Object.assign(item,{state:'failed',stage:'importing',runId:null,canRetry:true});
+ await page.route('**/project-queue/items/q1/retry',route=>{assert.deepEqual(route.request().postDataJSON(),{});item.state='queued';item.canRetry=false;return route.fulfill({json:{item}});});
+ await refreshWorkspace(page);const retry=page.locator('[data-queue-item=q1] [data-action=retry]');await retry.waitFor();
+ const sent=page.waitForRequest(request=>request.url().endsWith('/items/q1/retry'));await retry.click();await sent;
+});
 test('an unsent draft offers publication while an ambiguous send offers reconciliation',options,async t=>{
  const {page,fixture}=await workspace(t),[draft,sent]=fixture.overview.projects[0].items;
  Object.assign(draft,{state:'uncertain',stage:'publishing',canApprove:false,canRetry:true,publication:{state:'draft',checkpoint:'draft',postId:7633,canReconcile:false}});
@@ -167,10 +177,13 @@ test('a missing donor shows the exact filter funnel beside its page',options,asy
  await page.locator('#pq-dashboard-open').click();const row=page.locator('[data-queue-item="'+item.id+'"]');
  await row.getByText(/Гео: SK/).waitFor();assert.match(await row.textContent(),/трафік: від 50/);assert.match(await row.textContent(),/за гео: 14/i);assert.match(await row.textContent(),/за DR: 14/);assert.match(await row.textContent(),/за трафіком: 3/);assert.match(await row.textContent(),/зайнято: 3/);assert.match(await row.textContent(),/вільно: 0/);
 });
-async function workspace(t,{desktop=false,showScrollbars=false}={}){
+async function workspace(t,{desktop=false,showScrollbars=false,empty=false,deferQueue=false,legacy=false}={}){
  const {chromium}=require(playwrightPath),root=path.resolve(__dirname,'../dist'),calls=[],errors=[],fixture={projects:[{id:'p1',name:'AI проєкт',workflowType:'ai'},{id:'p2',name:'HTML проєкт',workflowType:'html'}],preview:{items:[{key:'one',title:'Polish page',source:'ai',language:'pl',geo:'PL',siteSelection:{minDr:30,minTraffic:100,geo:'PL'},links:[{url:'https://example.com/',anchor:'Exact anchor'}],editorial:{format:'article',topic:'casino',language:'pl'}}],issues:[],source:{kind:'table'}},overview:{projects:[{projectId:'p1',name:'AI проєкт',type:'ai',paused:false,priority:5,counts:{total:2,waiting:0,generating:1,ready:1,publishing:0,completed:0,attention:0},items:[{id:'q1',key:'one',title:'Polish page',language:'pl',geo:'PL',state:'ready',stage:'selecting',runId:'r1',canApprove:true},{id:'q2',key:'two',title:'Generating page',language:'de',geo:'DE',state:'generating',stage:'generating',runId:'r2',canApprove:false}]}],generation:{active:1,waiting:2},publication:{active:0,waiting:3}},failImport:true};
+ if(empty){fixture.projects=[];fixture.overview={projects:[],generation:{active:0,waiting:0},publication:{active:0,waiting:0}};}
+ if(legacy){fixture.projects=[{id:'p1',name:'AI проєкт'}];fixture.overview.projects=[];}
+ if(deferQueue)fixture.queueGate=new Promise(resolve=>{fixture.releaseQueue=()=>{fixture.queueGate=null;resolve();};});
  const server=http.createServer((req,res)=>{const file=path.resolve(root,new URL(req.url,'http://localhost').pathname.slice(1)||'autopilot.html');if(!file.startsWith(root+path.sep)||!fs.existsSync(file)){res.writeHead(404);return res.end();}res.writeHead(200,{'Content-Type':{'.html':'text/html','.js':'application/javascript','.css':'text/css'}[path.extname(file)]||'text/plain'});res.end(fs.readFileSync(file));});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin='http://127.0.0.1:'+server.address().port;
- const browser=await chromium.launch({executablePath:chromePath,headless:true,args:['--disable-background-networking','--no-first-run'],...(showScrollbars?{ignoreDefaultArgs:['--hide-scrollbars']}:{})}),context=await browser.newContext({viewport:{width:1400,height:1000}});t.after(async()=>{await context.close();await browser.close();await new Promise(resolve=>server.close(resolve));assert.deepEqual(errors,[]);});
+ const browser=await chromium.launch({executablePath:chromePath,headless:true,args:['--disable-background-networking','--no-first-run'],...(showScrollbars?{ignoreDefaultArgs:['--hide-scrollbars']}:{})}),context=await browser.newContext({viewport:{width:1400,height:1000}});t.after(async()=>{fixture.releaseQueue?.();await context.close();await browser.close();await new Promise(resolve=>server.close(resolve));assert.deepEqual(errors,[]);});
  await context.route('**/*',async route=>{const req=route.request(),url=new URL(req.url());if(url.origin!==origin)return route.abort();if(!url.pathname.startsWith('/api/'))return route.continue();const endpoint=url.pathname.replace('/api/lifecycle',''),method=req.method(),body=req.postDataJSON();calls.push({endpoint,method,body});if(method==='POST'&&req.headers()['x-pageposter-request']!=='1')return route.fulfill({status:403,contentType:'application/json',body:'{"error":"Missing request verification header"}'});let data;
   if(endpoint==='/projects'&&method==='GET')data={projects:fixture.projects};
   else if(endpoint==='/projects'&&method==='POST'){const project={id:'p3',...body};fixture.projects.push(project);data={project};}
@@ -178,7 +191,7 @@ async function workspace(t,{desktop=false,showScrollbars=false}={}){
   else if(endpoint==='/project-import/capabilities')data={version:1,local:{html:true,csv:true,paste:true},google:{mode:'user',connected:true,sheets:{available:true,reason:'Читання доступне у фікстурі.'},drive:{available:true,reason:'Читання доступне у фікстурі.'}}};
   else if(endpoint==='/project-import/preview')data=fixture.preview;
   else if(endpoint==='/project-queue/import'){if(fixture.failImport){fixture.failImport=false;return route.fulfill({status:503,contentType:'application/json',body:'{"error":"Temporary import failure"}'});}data={project:{id:'p3',name:body.name,workflowType:body.type},batch:{count:body.items.length}};fixture.projects.push(data.project);}
-  else if(endpoint==='/project-queue')data=fixture.overview;
+  else if(endpoint==='/project-queue'){if(fixture.queueGate)await fixture.queueGate;data=fixture.overview;}
   else if(endpoint==='/projects/p1/queue/start'){assert.equal(body.planToken,fixture.overview.projects[0].publicationPlan.token);data={queued:2,reused:false};fixture.overview.projects[0].publicationPlan={token:null,count:2,blockedReason:'Публікація виконується.'};for(const item of fixture.overview.projects[0].items)item.state='queued';}
   else if(endpoint==='/autopilot/r1/html')data={html:'<!doctype html><html><body><h1>Reviewed page</h1></body></html>',reviewToken:'exact-r1-review'};
   else if(endpoint==='/project-queue/approve')data={queued:body.items.length};
@@ -187,12 +200,12 @@ async function workspace(t,{desktop=false,showScrollbars=false}={}){
   else return route.fulfill({status:404,contentType:'application/json',body:'{"code":"NOT_FOUND"}'});return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
  });
  if(desktop)await context.addInitScript(()=>{window.pageposterDesktop={showAppMenu:async()=>({opened:true})};});
- const page=await context.newPage();page.setDefaultTimeout(6000);page.on('pageerror',error=>errors.push(error.message));await page.goto(origin+'/autopilot.html');await page.locator('#ap-title').getByText('AI проєкт',{exact:true}).waitFor({state:'attached'});return {page,calls,fixture};
+ const page=await context.newPage();page.setDefaultTimeout(6000);page.on('pageerror',error=>errors.push(error.message));await page.goto(origin+'/autopilot.html');if(empty)await page.locator('#pq-projects > .pq-empty').waitFor();else await page.locator('#ap-title').getByText('AI проєкт',{exact:true}).waitFor({state:'attached'});return {page,calls,fixture};
 }
 
 test('desktop opens the table and separates a new page from a saved preview; settings keep advanced functions reachable',options,async t=>{
  const {page}=await workspace(t,{desktop:true});await page.locator('[data-queue-item="q1"]').waitFor();assert.equal(await page.locator('#ap-launch-form').isVisible(),false);
- await page.locator('#pq-dashboard-close').click();await page.locator('#ap-launch-form').waitFor();assert.equal(await page.locator('#pq-dashboard').isVisible(),false);assert.equal(await page.locator('#ap-stage-frame').isVisible(),false);assert.equal(await page.locator('#ap-stage-publish').isDisabled(),true);
+ await page.locator('#pq-project-filter').selectOption('p1');await page.locator('#pq-dashboard-close').click();await page.locator('#ap-launch-form').waitFor();assert.equal(await page.locator('#pq-dashboard').isVisible(),false);assert.equal(await page.locator('#ap-stage-frame').isVisible(),false);assert.equal(await page.locator('#ap-stage-publish').isDisabled(),true);
  await page.locator('#ap-composer-bar button').click();await page.locator('[data-queue-item="q1"]').waitFor();
  await page.locator('#ap-settings-open').click();assert.equal(await page.locator('#ap-source-form').isVisible(),true);assert.equal(await page.locator('#ap-key-form').isVisible(),false);
  await page.locator('[data-settings-tab="ai"]').click();assert.match(await page.locator('#ap-ai-state').textContent(),/Ключ збережено/);await page.locator('#ap-key-editor > summary').click();assert.equal(await page.locator('#ap-key-form').isVisible(),true);
@@ -547,14 +560,14 @@ test('a 1000-row refresh updates the changed row without rebuilding the rest of 
 });
 
 test('import previews exact per-page settings, blocks invalid rows and retries one immutable import while queues are busy',options,async t=>{
- const {page,calls,fixture}=await workspace(t);await page.locator('#pq-import-open').click();if(!await page.locator('#pq-manual-import').evaluate(panel=>panel.open))await page.locator('#pq-manual-import > summary').click();await page.locator('#pq-name').fill('October pages');await page.locator('#pq-text').fill('key,title,url,anchor,language,geo\none,Polish page,https://example.com/,Exact anchor,pl,PL');await page.locator('#pq-default-language').selectOption('pl');await page.locator('#pq-default-geo').fill('PL');await page.locator('#pq-preview-import').click();await page.locator('#pq-import-rows').getByText('Polish page',{exact:true}).waitFor();assert.equal(await page.locator('#pq-commit-import').isEnabled(),true);assert.match(await page.locator('#pq-import-count').textContent(),/1/);const evidence=path.resolve(__dirname,'../.pageposter');fs.mkdirSync(evidence,{recursive:true});await page.locator('#pq-import-dialog').evaluate(dialog=>dialog.scrollTop=0);await page.screenshot({path:path.join(evidence,'queue-import.png'),fullPage:true});
+ const {page,calls,fixture}=await workspace(t);await page.locator('#pq-import-open').click();if(!await page.locator('#pq-manual-import').evaluate(panel=>panel.open))await page.locator('#pq-manual-import > summary').click();await page.locator('#pq-name').fill('October pages');await page.locator('#pq-text').fill('key,title,url,anchor,language,geo\none,Polish page,https://example.com/,Exact anchor,pl,PL');await page.locator('#pq-default-language').selectOption('pl');await page.locator('#pq-default-geo').fill('PL');await page.locator('#pq-preview-import').click();await page.locator('#pq-import-rows').getByText('Polish page',{exact:true}).waitFor();assert.equal(await page.locator('#pq-commit-import').isEnabled(),true);assert.match(await page.locator('#pq-import-count').textContent(),/1/);const evidence=evidenceDir(t);await page.locator('#pq-import-dialog').evaluate(dialog=>dialog.scrollTop=0);await page.screenshot({path:path.join(evidence,'queue-import.png'),fullPage:true});
  const preview=calls.find(call=>call.endpoint==='/project-import/preview');assert.equal(preview.body.type,'ai');assert.equal(preview.body.defaults.language,'pl');assert.equal(preview.body.defaults.geo,'PL');await page.locator('#pq-commit-import').click();await page.getByText('Temporary import failure',{exact:true}).waitFor();await page.locator('#pq-commit-import').click();await page.locator('#pq-import-dialog').waitFor({state:'hidden'});const imports=calls.filter(call=>call.endpoint==='/project-queue/import');assert.equal(imports.length,2);assert.deepEqual(imports[1].body,imports[0].body);assert.equal(imports[0].body.items[0].language,'pl');assert.match(imports[0].body.idempotencyKey,/^[\da-f-]{36}$/i);
  await page.locator('#pq-dashboard-close').click();await page.locator('#pq-import-open').click();if(!await page.locator('#pq-manual-import').evaluate(panel=>panel.open))await page.locator('#pq-manual-import > summary').click();await page.locator('#pq-text').fill('bad row');fixture.preview={items:[],issues:[{row:2,message:'Missing anchor'}],source:{kind:'table'}};await page.locator('#pq-preview-import').click();await page.locator('#pq-import-issues').getByText('Missing anchor',{exact:false}).waitFor();assert.equal(await page.locator('#pq-commit-import').isDisabled(),true);
 });
 
 test('publication accepts only the exact explicitly reviewed row and invalidates review on changed queue data',options,async t=>{
  const {page,calls,fixture}=await workspace(t);fixture.overview.projects[0].items[0].warnings=['Вбудований скрипт видалено.'];await page.locator('#pq-dashboard-open').click();await page.locator('[data-queue-item="q1"]').waitFor();assert.equal(await page.locator('#pq-approve-selected').isDisabled(),true);assert.match(await page.locator('#pq-generation').textContent(),/1.*2/);assert.match(await page.locator('#pq-publication').textContent(),/0.*3/);
- const evidence=path.resolve(__dirname,'../.pageposter');fs.mkdirSync(evidence,{recursive:true});await page.screenshot({path:path.join(evidence,'queue-dashboard.png'),fullPage:false});await page.locator('[data-queue-item="q1"] [data-action=preview]').click();await page.frameLocator('#pq-review-frame').getByRole('heading',{name:'Reviewed page'}).waitFor();await page.locator('#pq-review-warnings').getByText('Вбудований скрипт видалено.',{exact:true}).waitFor();assert.equal(await page.locator('#pq-review-frame').getAttribute('sandbox'),'allow-scripts');await page.locator('#pq-mark-reviewed').click();await page.locator('[data-queue-item="q1"] input[type=checkbox]').check();await page.locator('#pq-approve-selected').click();await page.getByText(/Передано на публікацію/).waitFor();assert.deepEqual(calls.find(call=>call.endpoint==='/project-queue/approve').body,{items:[{id:'q1',reviewToken:'exact-r1-review'}]});
+ const evidence=evidenceDir(t);await page.screenshot({path:path.join(evidence,'queue-dashboard.png'),fullPage:false});await page.locator('[data-queue-item="q1"] [data-action=preview]').click();await page.frameLocator('#pq-review-frame').getByRole('heading',{name:'Reviewed page'}).waitFor();await page.locator('#pq-review-warnings').getByText('Вбудований скрипт видалено.',{exact:true}).waitFor();assert.equal(await page.locator('#pq-review-frame').getAttribute('sandbox'),'allow-scripts');await page.locator('#pq-mark-reviewed').click();await page.locator('[data-queue-item="q1"] input[type=checkbox]').check();await page.locator('#pq-approve-selected').click();await page.getByText(/Передано на публікацію/).waitFor();assert.deepEqual(calls.find(call=>call.endpoint==='/project-queue/approve').body,{items:[{id:'q1',reviewToken:'exact-r1-review'}]});
  await page.locator('[data-queue-item="q1"] [data-action=preview]').click();await page.frameLocator('#pq-review-frame').getByRole('heading',{name:'Reviewed page'}).waitFor();await page.locator('#pq-mark-reviewed').click();fixture.overview.projects[0].items[0].title='Changed page';await refreshWorkspace(page);await page.locator('[data-queue-item="q1"]').getByText('Changed page',{exact:true}).waitFor();assert.equal(await page.locator('#pq-approve-selected').isDisabled(),true);await page.locator('[data-action=pause]').click();await page.getByRole('button',{name:'Продовжити проєкт',exact:true}).waitFor();assert.equal(calls.some(call=>call.endpoint==='/projects/p1/queue'&&call.body.action==='pause'),true);
 });
 
@@ -578,4 +591,110 @@ test('desktop project heading has no empty-project shortcut and keeps management
  await page.getByRole('button',{name:'Імпорт проєкту',exact:true}).click();
  await page.locator('#pq-import-dialog[open]').waitFor();
  assert.equal(calls.some(call=>call.endpoint==='/projects'&&call.method==='POST'),false);
+});
+
+test('an empty desktop starts a single page without an unavailable project shortcut or silent creation',options,async t=>{
+ const {page,calls}=await workspace(t,{desktop:true,empty:true});
+ await page.getByRole('button',{name:'Додати одну сторінку',exact:true}).click();
+ await page.locator('#ap-project-dialog[open]').waitFor();
+ assert.equal(calls.some(call=>call.endpoint==='/projects'&&call.method==='POST'),false);
+ await page.getByRole('button',{name:'Закрити створення проєкту',exact:true}).click();
+ assert.equal(await page.locator('#pq-dashboard').isVisible(),true);
+ assert.equal(calls.some(call=>call.endpoint==='/projects'&&call.method==='POST'),false);
+ await page.getByRole('button',{name:'Додати одну сторінку',exact:true}).click();
+ await page.locator('#ap-project-dialog input[name=projectName]').fill('Перша сторінка');
+ await page.locator('#ap-project-form button[type=submit]').click();
+ await page.locator('#ap-launch-form').waitFor();
+ assert.equal(await page.locator('#pq-dashboard').isVisible(),false);
+ assert.equal(calls.filter(call=>call.endpoint==='/projects'&&call.method==='POST').length,1);
+ assert.equal(calls.some(call=>/queue\/start|queue\/approve|autopilot\/launch/.test(call.endpoint)),false);
+});
+
+test('project selection advice names real controls instead of a removed shortcut',options,async t=>{
+ const {page,fixture}=await workspace(t,{desktop:true});
+ fixture.overview.projects.push({projectId:'p2',name:'HTML проєкт',type:'html',items:[],counts:{total:0}});
+ await page.locator('#pq-dashboard-open').click();
+ await page.locator('[data-queue-project=p2]').waitFor();
+ await page.getByRole('button',{name:'Додати одну сторінку',exact:true}).click();
+ const hint=await page.locator('#pq-dashboard-note').textContent();
+ assert.doesNotMatch(hint,/«\+»|плюс/i);assert.match(hint,/Імпорт проєкту/);
+});
+
+test('the removed project shortcut is absent on mobile too',options,async t=>{
+ const {page}=await workspace(t,{desktop:true});await page.setViewportSize({width:390,height:844});
+ assert.equal(await page.locator('.ap-mobile-new').count(),0);
+});
+
+test('one-page creation waits for queue discovery instead of treating loading as no projects',options,async t=>{
+ const {page,calls,fixture}=await workspace(t,{desktop:true,deferQueue:true});
+ assert.equal(await page.locator('#pq-dashboard-close').isDisabled(),true);
+ assert.equal(await page.locator('#ap-project-dialog').isVisible(),false);
+ fixture.releaseQueue();await page.locator('[data-queue-item=q1]').waitFor();
+ await page.locator('#pq-dashboard-close').click();await page.locator('#ap-launch-form').waitFor();
+ assert.equal(calls.some(call=>call.endpoint==='/projects'&&call.method==='POST'),false);
+});
+
+test('an old project outside the typed queue opens its own composer without creating another project',options,async t=>{
+ const {page,calls}=await workspace(t,{desktop:true,legacy:true});await page.locator('#pq-projects > .pq-empty').waitFor();
+ await page.locator('#pq-dashboard-close').click();await page.locator('#ap-launch-form').waitFor();
+ assert.equal(await page.locator('#ap-project-dialog').isVisible(),false);
+ assert.equal(calls.some(call=>call.endpoint==='/projects'&&call.method==='POST'),false);
+});
+test('one queued project cannot hide another empty legacy project when adding a page',options,async t=>{
+ const {page,calls,fixture}=await workspace(t,{desktop:true});fixture.projects[1]={id:'p2',name:'Старий проєкт'};
+ await refreshWorkspace(page);await page.locator('#pq-project-filter').selectOption('');await page.locator('#pq-dashboard-close').click();
+ await page.locator('#pq-dashboard-note').getByText(/Оберіть доступний проєкт/).waitFor();
+ assert.equal(await page.locator('#ap-launch-form').isVisible(),false);
+ assert.equal(await page.locator('#ap-project-dialog').isVisible(),false);
+ assert.equal(calls.some(call=>call.endpoint==='/projects'&&call.method==='POST'),false);
+});
+
+test('a queued close event cannot clear a reopened first-page dialog intent',options,async t=>{
+ const {page,calls}=await workspace(t,{desktop:true,empty:true});await page.locator('#pq-dashboard-close').click();
+ await page.evaluate(()=>{document.getElementById('ap-project-dialog').close();window.dispatchEvent(new Event('pageposter:queue-project-create'));});
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ await page.locator('#ap-project-dialog input[name=projectName]').fill('Повторне відкриття');
+ await page.locator('#ap-project-form button[type=submit]').click();await page.locator('#ap-launch-form').waitFor();
+ assert.equal(await page.locator('#pq-dashboard').isVisible(),false);
+ assert.equal(calls.filter(call=>call.endpoint==='/projects'&&call.method==='POST').length,1);
+});
+
+test('a parked creation without a confirmed identity exposes its reason rather than an impossible resume',options,async t=>{
+ const {page,fixture}=await workspace(t,{desktop:true}),item=fixture.overview.projects[0].items[0];
+ Object.assign(item,{state:'needs_attention',publicationParked:true,canResumeParked:false,parkedResumeBlockedReason:'WordPress не підтвердив ID створеної сторінки.'});
+ await refreshWorkspace(page);
+ const row=page.locator('[data-queue-item=q1]');
+ assert.equal(await row.locator('[data-action=resume-parked]').count(),0);
+ await row.getByText(item.parkedResumeBlockedReason,{exact:true}).waitFor();
+});
+
+test('a paused preview with a stored token describes read-only access instead of prompting approval',options,async t=>{
+ const {page,fixture}=await workspace(t,{desktop:true});fixture.overview.projects[0].items[0].canApprove=false;
+ await refreshWorkspace(page);await page.locator('[data-queue-item=q1] [data-action=preview]').click();
+ await page.frameLocator('#pq-review-frame').getByRole('heading',{name:'Reviewed page'}).waitFor();
+ assert.equal(await page.locator('#pq-mark-reviewed').isDisabled(),true);
+ assert.match(await page.locator('#pq-review-note').textContent(),/недоступне|лише/i);
+});
+
+test('queue search finds the displayed HTML and table filenames with opaque task keys',options,async t=>{
+ const {page,fixture}=await workspace(t,{desktop:true});
+ fixture.overview.projects[0].items[0].provenance={kind:'archive',source:{file:'campaign-landing.html',tableFile:'instructions-2026.csv',row:2}};
+ await refreshWorkspace(page);
+ await page.locator('#pq-search').fill('campaign-landing.html');
+ await page.locator('[data-queue-item=q1]').waitFor();
+ assert.equal(await page.locator('[data-queue-item=q2]').count(),0);
+ await page.locator('#pq-search').fill('instructions-2026.csv');
+ await page.locator('[data-queue-item=q1]').waitFor();
+});
+
+test('CSV reports the visible manual review result and confirmed trash is not an active publication',options,async t=>{
+ const {page,fixture}=await workspace(t,{desktop:true}),item=fixture.overview.projects[0].items[0];
+ Object.assign(item,{state:'completed',fullUrl:'https://published.example/page/',manualReview:{state:'approved'}});
+ await refreshWorkspace(page);await page.locator('[data-queue-item=q1]').getByText('Опубліковано · схвалено',{exact:true}).waitFor();
+ await page.getByText('Вигляд і експорт',{exact:true}).click();
+ const downloading=page.waitForEvent('download');await page.locator('#pq-export').click();
+ const csv=fs.readFileSync(await(await downloading).path(),'utf8');assert.match(csv,/Опубліковано · схвалено/);
+ item.manualReview={state:'trashed'};item.fullUrl='';
+ await refreshWorkspace(page);await page.locator('#pq-filter-state').selectOption('completed');
+ assert.equal(await page.locator('[data-queue-item=q1]').count(),0);
 });

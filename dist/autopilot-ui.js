@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 const $=id=>document.getElementById(id),api='/api/lifecycle',activeStates=new Set(['queued','running','publishing','checking']);
-const state={stage:null,dialogStage:null,stageSerial:0,stageMobile:false,dialogMobile:false,autoPreviewRun:null,suppressAutoPreview:false,stageLoading:null,publishBusy:false,projects:[],selected:null,pages:[],runs:[],overview:new Map(),status:null,load:0,busy:false,html:'',replacement:null,replacementSerial:0,poll:null,refreshPending:false,restartRequired:false,pendingReadErrors:new Set(),sourceBusy:false,settingsSerial:0,selectionSession:null,checkJobs:new Set(),checkProjects:new Set(),drafts:new Map(),pending:new Map(),storageError:false,savedSelection:undefined,focusReturn:new Map(),mode:'ai',review:null,previewBusy:false,previewSerial:0,fileSerial:0};
+const state={stage:null,dialogStage:null,stageSerial:0,stageMobile:false,dialogMobile:false,autoPreviewRun:null,suppressAutoPreview:false,stageLoading:null,publishBusy:false,projects:[],projectsReady:false,selected:null,pages:[],runs:[],overview:new Map(),status:null,load:0,busy:false,html:'',replacement:null,replacementSerial:0,poll:null,refreshPending:false,restartRequired:false,pendingReadErrors:new Set(),sourceBusy:false,settingsSerial:0,selectionSession:null,checkJobs:new Set(),checkProjects:new Set(),drafts:new Map(),pending:new Map(),storageError:false,savedSelection:undefined,focusReturn:new Map(),mode:'ai',review:null,previewBusy:false,previewSerial:0,fileSerial:0};
 const labels={paused:'Призупинено',awaiting_review:'Готова до перегляду',queued:'У черзі',running:'Створюємо сторінку',waiting_source:'Потрібна база сайтів',failed:'Не вдалося завершити',uncertain:'Потрібно перевірити результат',publishing:'Публікуємо',checking:'Перевіряємо сторінку',completed:'Готово',needs_attention:'Потрібна увага'};
 state.fileBusy=false;
 const steps=[['generating','Тексти й дизайн'],['selecting','Підбір сайту'],['installing','Плагін'],['publishing','Публікація'],['checking','Перевірка']];
@@ -14,7 +14,7 @@ function append(parent,...children){children.filter(Boolean).forEach(child=>pare
 function clear(node){node.replaceChildren();}
 function showMessage(text,bad=false,target=$('ap-notice')){target.textContent=text;target.classList.toggle('error',bad);target.hidden=!text;}
 function errorText(error){const map={AI_OUTPUT_INVALID:'ШІ повернув сторінку в непридатному форматі. Сторінку не підготовлено; посилання й анкори збережено.',REVIEW_REQUIRED:'Сторінка змінилася. Відкрийте її актуальний перегляд перед публікацією.',HTML_REVIEW_REQUIRED:'HTML змінився або перегляд застарів. Перегляньте поточний варіант ще раз.',AI_AUTH_FAILED:'Ключ OpenAI не прийнято. Перевірте підключення.',AI_ACCESS_DENIED:'OpenAI відмовив у доступі (403). Перевірте права API-ключа й доступ проєкту до вибраної моделі. Після виправлення продовжте збережений запуск вручну.',AI_MODEL_UNAVAILABLE:'Вибрана модель OpenAI недоступна. Перевірте підключення й налаштування моделі.',AI_RATE_LIMITED:'OpenAI тимчасово обмежив запити. Готові кроки збережено.',AI_RESULT_UNCERTAIN:'Запит міг виконатися. Спочатку потрібно перевірити його результат.',AI_BUDGET_EXCEEDED:'Досягнуто ліміту витрат OpenAI.',CONFLICT:'Сторінка змінилася. Оновіть дані й підготуйте заміну знову.',SOURCE_NOT_CONFIGURED:'Для підключення бази увійдіть у робочий акаунт Google або підключіть сервісний акаунт із доступом на читання.',not_configured:'Спочатку збережіть ключ OpenAI у налаштуваннях.',VALIDATION:'Перевірте заповнені поля.',PRECHECK_FAILED:'Перед заміною потрібна успішна свіжа перевірка сторінки.'};return ((error?.diagnostics||error?.issues?.length)&&error?.message)||map[error?.code]||error?.message||'Не вдалося отримати відповідь сервера. Спробуйте ще раз.';}
-async function request(route,body,method){if(state.restartRequired)throw Error('Копію відновлено. Перезапустіть PagePoster перед продовженням роботи.');const response=await fetch(route.startsWith('/api/')?route:api+route,{method:method||(body===undefined?'GET':'POST'),credentials:'same-origin',headers:{'Content-Type':'application/json','X-PagePoster-Request':'1'},...(body===undefined?{}:{body:JSON.stringify(body)})});let data;try{data=await response.json();}catch{throw Error('Сервер PagePoster недоступний. Відкрийте локальну версію програми.');}if(!response.ok){const err=Error(typeof data.error==='string'?data.error:data.message||'Не вдалося виконати запит.');err.code=data.code;err.diagnostics=data.diagnostics;err.status=response.status;throw err;}return data;}
+async function request(route,body,method){if(state.restartRequired)throw Error(state.recoveryFailed?'Відновлення не підтверджено. Перезапустіть PagePoster перед продовженням роботи.':'Копію відновлено. Перезапустіть PagePoster перед продовженням роботи.');const response=await fetch(route.startsWith('/api/')?route:api+route,{method:method||(body===undefined?'GET':'POST'),credentials:'same-origin',headers:{'Content-Type':'application/json','X-PagePoster-Request':'1'},...(body===undefined?{}:{body:JSON.stringify(body)})});let data;try{data=await response.json();}catch{throw Error('Сервер PagePoster недоступний. Відкрийте локальну версію програми.');}if(!response.ok){const err=Error(typeof data.error==='string'?data.error:data.message||'Не вдалося виконати запит.');err.code=data.code;err.diagnostics=data.diagnostics;err.status=response.status;throw err;}return data;}
 function safeUrl(value){try{const u=new URL(value);return /^https?:$/.test(u.protocol)&&!u.username&&!u.password&&!/\s/.test(value)?value:null;}catch{return null;}}
 function link(text,url,cls='ap-exact-url'){const safe=safeUrl(url);if(!safe)return el('span',cls,text);const a=el('a',cls,text);a.href=safe;a.target='_blank';a.rel='noopener noreferrer';return a;}
 function date(value){if(!value)return 'ще не перевіряли';const d=new Date(value);return Number.isNaN(d.valueOf())?'дата невідома':d.toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}
@@ -103,17 +103,27 @@ function updateStatus(){
  $('ap-html-preview').disabled=state.busy||state.fileBusy||state.previewBusy||!!invalid;updateStageActions();
  const retry=$('ap-retry-launch');if(retry){retry.hidden=!state.selected||!getPending();retry.disabled=state.busy;}
  $('ap-html-size').textContent=new TextEncoder().encode($('ap-launch-form').elements.customerHtml.value).byteLength.toLocaleString('uk-UA')+' / 500 000 байт';
- $('ap-launch-note').textContent=isHtml?(state.fileBusy?'Читаємо HTML і включаємо зображення та шрифти…':invalid||(state.previewBusy?'Готуємо попередній перегляд…':'Підготовка безкоштовна й не запускає публікацію.')):!ai?'Для ШІ потрібен ключ OpenAI. Готовий HTML можна переглянути без ключа.':'Створення використовує OpenAI. Публікація — після перегляду й вашого натискання.';
+ $('ap-launch-note').textContent=isHtml?(state.fileBusy?'Читаємо HTML і включаємо зображення та шрифти…':invalid||(state.previewBusy?'Готуємо попередній перегляд…':'Підготовка безкоштовна й не запускає публікацію.')):!ai?'Для генерації цієї сторінки збережіть ключ OpenAI в налаштуваннях.':'Створення використовує OpenAI. Публікація — після перегляду й вашого натискання.';
  $('ap-ai-state').textContent=ai?'Модель: '+(state.status?.aiModel||'із налаштувань')+'. Ключ збережено; доступ і баланс перевіряються окремо.':'Для текстів, структури й оформлення сторінок.';
  renderSetup();
  $('ap-source-state').textContent=connected?'Налаштування таблиці збережено. Перевірте доступ і підбір перед публікацією.':state.status?.source?.spreadsheetId?'Параметри таблиці збережено. Підключіть вибраний акаунт Google.':'Сайти підбираються з вашої таблиці автоматично.';
 }
 async function refreshStatus(){state.status=await request('/autopilot/status');updateStatus();}
 window.addEventListener('pageposter:google-account-changed',()=>{if(!state.restartRequired)refreshStatus().catch(()=>{});});
+function storeProjects(result){if(!Array.isArray(result?.projects))throw Error('Сервер не підтвердив список проєктів. Оновіть дані.');state.projects=result.projects;state.projectsReady=true;}
+function openQueueComposer(id,{allowCreate=false}={}){
+ const target=$('pq-dashboard-note')||$('ap-notice');
+ if(state.restartRequired||state.busy||!state.projectsReady){showMessage(state.restartRequired?'Перезапустіть PagePoster перед продовженням роботи.':state.busy?'Дочекайтеся підтвердження поточного запиту.':'Список проєктів ще завантажується. Оновіть дані перед додаванням сторінки.',true,target);return;}
+ const active=state.projects.filter(project=>!project.archived&&!project.trashed);
+ if(!id&&active.length===1)id=active[0].id;
+ if(!id&&!active.length&&allowCreate){$('ap-project-dialog').dataset.composePage='true';openDialog('ap-project-dialog');return;}
+ if(!active.some(project=>project.id===id)){showMessage('Оберіть доступний проєкт у фільтрі «Проєкт» або в лівому списку. Новий можна додати через «Імпорт проєкту».',true,target);return;}
+ if($('pq-dashboard')?.open)$('pq-dashboard').close();
+ void selectProject(id,{composer:true}).catch(error=>showMessage(errorText(error),true));
+}
 function renderProjects(){
  clear($('ap-project-list'));$('ap-all').setAttribute('aria-current',state.selected===null?'page':'false');
  for(const project of state.projects.filter(p=>!p.archived)){const control=button('',()=>selectProject(project.id),'ap-project-button');control.setAttribute('aria-current',project.id===state.selected?'page':'false');control.setAttribute('aria-label',project.name);append(control,el('span','ap-project-symbol',project.name.slice(0,2).toUpperCase()),el('span','ap-project-name',project.name));$('ap-project-list').appendChild(control);}
- const mobileNew=button('+ Створити проєкт',()=>openDialog('ap-project-dialog'),'ap-project-button ap-mobile-new');mobileNew.style.display='none';$('ap-project-list').appendChild(mobileNew);
 }
 let managedProjectAction=null;
 const projectActions={close:{title:'Закрити проєкт?',label:'Закрити проєкт',details:'Проєкт зникне з основного списку, а його завдання стануть на паузу. Сторінки та історія збережуться. Повернути його можна у розділі «Закриті».',success:'Проєкт закрито. Його можна повернути у розділі «Закриті».'},trash:{title:'Перемістити проєкт у кошик?',label:'До кошика',details:'Проєкт та його завдання буде прибрано з робочого простору. Його можна відновити з кошика. Публікації на сайтах залишаться на місці.',success:'Проєкт переміщено в кошик.'},reopen:{title:'Відкрити проєкт?',label:'Відкрити проєкт',details:'Проєкт повернеться до активних. Завдання залишаться на паузі до вашого ручного продовження у «Чергах проєктів».',success:'Проєкт відкрито. Продовжити завдання можна у «Чергах проєктів».'},restore:{title:'Відновити проєкт?',label:'Відновити проєкт',details:'Проєкт повернеться до активних зі сторінками та історією. Завдання залишаться на паузі до ручного продовження.',success:'Проєкт відновлено. Завдання залишаються на паузі.'}};
@@ -131,7 +141,7 @@ function renderManagedProjects(){
 }
 async function openProjectManager(){
  if(state.busy||state.publishBusy||state.previewBusy)return showMessage('Зачекайте завершення поточного запиту.',true);
- try{const result=await request('/projects');state.projects=result.projects||[];renderProjects();$('ap-project-scope').value='active';showMessage('',false,$('ap-project-manager-note'));renderManagedProjects();openDialog('ap-project-manager');}
+ try{const result=await request('/projects');storeProjects(result);renderProjects();$('ap-project-scope').value='active';showMessage('',false,$('ap-project-manager-note'));renderManagedProjects();openDialog('ap-project-manager');}
  catch(error){showMessage(errorText(error),true);}
 }
 function openProjectAction(project,action){
@@ -204,6 +214,7 @@ function section(title,count){const section=el('section','ap-result-block'),head
 function badge(text,type){return el('span','ap-badge '+(type||''),text);}
 function publicationStatus(publication,verification){
  if(!publication)return null;
+ if(publication.state==='trashed')return {label:'Кошик підтверджено',type:'warning',working:false};
  const recovery=publication.recovery;
  if(['reading','waiting','retrying'].includes(recovery?.state))return {label:recovery.state==='waiting'?'Повторюємо безпечне читання':'Звіряємо створену сторінку',type:'',working:true};
  const published=publication.checkpoint==='published'||publication.lastEvidence?.observation==='published';
@@ -214,6 +225,7 @@ function publicationStatus(publication,verification){
  const value=states[publication.state];return value?{label:value[0],type:value[1],working:['reconciling','published_checking'].includes(publication.state)}:null;
 }
 function publicationCanContinue(publication){return !publication||['not_sent','draft','manual_action','blocked','trashed'].includes(publication.state)&&!publicationStatus(publication)?.working;}
+function skippedSiteReason(skip){const code=skip.code;const reasons={NATIVE_VISUAL_REJECTED:'зламаний вигляд; створену сторінку переміщено в кошик.',bootstrap_auth_failed:'дані для входу не підійшли.',CLEAN_LINKS_FILESYSTEM_REQUIRED:'WordPress потребує FTP-доступу для плагіна.',CLEAN_LINKS_INSTALL_FORBIDDEN:'WordPress відхилив встановлення плагіна.',BROWSER_PAGE_UNAVAILABLE:Number.isInteger(skip.httpStatus)?'відповідь HTTP '+skip.httpStatus+' під час відкриття WordPress.':'не вдалося відкрити WordPress.',BROWSER_TIMEOUT:'час очікування WordPress вичерпано.',network_timeout:'час очікування відповіді сайту вичерпано.',network_failed:'помилка з’єднання із сайтом.',dns_failed:'DNS не знайшов адресу сайту.',BROWSER_ORIGIN_BLOCKED:'переадресацію за межі дозволеної адреси заблоковано.',NATIVE_NAVIGATION_UNAVAILABLE:'недоступне створення сторінки.'};return reasons[code]||(typeof skip.message==='string'&&skip.message!==code?skip.message:'не вдалося завершити крок на сайті.');}
 function capabilityHistoryTable(history){
  if(!Array.isArray(history?.rows)||!history.rows.length)return null;
  const wrapper=el('div','ap-capability-history'),table=el('table'),head=el('thead'),heading=el('tr'),body=el('tbody');
@@ -312,6 +324,7 @@ function checkDiagnostics(verification){
  return box;
 }
 function openAiSettings(){openSettings();window.PagePosterSettings?.show('ai');if($('ap-key-editor'))$('ap-key-editor').open=true;$('ap-key-form').elements.apiKey.focus();}
+function openSourceSettings(){openSettings();window.PagePosterSettings?.show('google');}
 function currentDestination(session){return state.destinationSession===session&&$('ap-destination').open&&!state.restartRequired;}
 function destinationControls(session){
  if(state.destinationSession!==session)return;
@@ -432,11 +445,11 @@ function renderRun(run,{inspector=false}={}){
  append(top,text,statusBadge(run));card.appendChild(top);
  const progress=el('ol','ap-run-steps');let index=steps.findIndex(s=>s[0]===run.stage);if(run.state==='completed')index=steps.length;else if(index<0)index=0;
  steps.forEach((item,i)=>progress.appendChild(el('li','ap-step '+(i<index?'done':i===index?'active':''),i===0&&(run.source==='html'||run.stage==='preparing')?'Підготовка HTML':item[1])));card.appendChild(progress);
- if(run.state==='awaiting_review')card.appendChild(el('p','ap-inline-note','Сторінку підготовлено. Перегляньте її на комп’ютері, потім натисніть «Опублікувати сторінку».'));
+ if(run.state==='awaiting_review')card.appendChild(el('p','ap-inline-note',(inspector?'Сторінку підготовлено. Позначте «Я переглянув цю сторінку», потім натисніть «Опублікувати вибрані» у списку сторінок.':'Сторінку підготовлено. Перегляньте її на комп’ютері, потім натисніть «Опублікувати сторінку».')));
  if(run.state==='waiting_source')card.appendChild(el('p','ap-inline-note','HTML уже збережено. Укажіть сайт вручну або підключіть Google Таблицю для підбору.'));
  if(run.destinationMode==='manual')card.appendChild(el('p','ap-inline-note','Сайт публікації: '+run.selectedDomain+' · вибрано вручну'));
- for(const skipped of run.skippedSites||[]){let host;try{host=new URL(skipped.baseUrl).hostname;}catch{continue;}card.appendChild(el('p','ap-inline-note','Пропущено '+host+': '+(skipped.code==='NATIVE_VISUAL_REJECTED'?'зламаний вигляд; створену сторінку переміщено в кошик.':skipped.code==='bootstrap_auth_failed'?'дані для входу не підійшли.':skipped.code==='CLEAN_LINKS_FILESYSTEM_REQUIRED'?'WordPress потребує FTP-доступу для плагіна.':skipped.code==='BROWSER_PAGE_UNAVAILABLE'?(Number.isInteger(skipped.httpStatus)?'відповідь HTTP '+skipped.httpStatus+' під час відкриття WordPress.':'не вдалося відкрити WordPress.'):'установлення плагіна недоступне.')));}
- if(run.pluginFallback)card.appendChild(el('p','ap-inline-note',run.cleanupPhase?'Зламаний вигляд сторінки. Тул підтверджує її переміщення в кошик перед зміною донора.':'Clean Links недоступний. Тул публікує HTML і перевіряє його вигляд на комп’ютері.'));
+ for(const skipped of run.skippedSites||[]){let host;try{host=new URL(skipped.baseUrl).hostname;}catch{continue;}card.appendChild(el('p','ap-inline-note','Пропущено '+host+': '+skippedSiteReason(skipped)));}
+ if(run.pluginFallback)card.appendChild(el('p','ap-inline-note',run.cleanupPhase?'Зламаний вигляд сторінки. Тул підтверджує її переміщення в кошик перед зміною донора.':(window.pageposterDesktop?'Clean Links недоступний. Після публікації перевірте вигляд сторінки вручну.':'Clean Links недоступний. Тул публікує HTML і перевіряє його вигляд на комп’ютері.')));
  if(run.error&&!publicationStatus(run.publication)?.working)card.appendChild(el('p','ap-inline-note',errorText(run.error)));
  const publicationDetails=publicationDiagnostics(run.publication);if(publicationDetails)card.appendChild(publicationDetails);
  if(run.verification?.diagnostics)card.appendChild(checkDiagnostics(run.verification));
@@ -447,12 +460,13 @@ function renderRun(run,{inspector=false}={}){
  if(!inspector&&(['selecting','installing','publishing','checking','completed'].includes(run.stage)||run.pageId))actions.appendChild(button(run.state==='awaiting_review'?'Переглянути й опублікувати':'Попередній перегляд',event=>working(event.currentTarget,()=>preview(run.id))));
  if(!inspector&&(run.hasHtml||run.pageId))actions.appendChild(button('Копіювати HTML',event=>{const control=event.currentTarget;return working(control,()=>copyRunHTML(run.id,control));}));
  if(run.publication?.canReconcile){const reconcile=button('Звірити стан сторінки',()=>openReconciliation(run));reconcile.dataset.action='reconcile';actions.appendChild(reconcile);}
- if(run.pageId)actions.appendChild(linkReportControl(run.pageId));
- if(publicationCanContinue(run.publication)&&['waiting_source','failed','uncertain','needs_attention','paused'].includes(run.state)){
-  if(run.state==='waiting_source'&&!state.status?.source?.configured)actions.appendChild(button('Підключити таблицю',openSettings));
+ if(run.pageId&&run.publication?.state!=='trashed')actions.appendChild(linkReportControl(run.pageId));
+ if((!run.publicationParked||run.canResumeParked===true)&&(run.publication?.state!=='trashed'||!!run.cleanupPhase)&&publicationCanContinue(run.publication)&&['waiting_source','failed','uncertain','needs_attention','paused'].includes(run.state)){
+  if(run.state==='waiting_source'&&!state.status?.source?.configured)actions.appendChild(button('Підключити таблицю',openSourceSettings));
   else actions.appendChild(button(run.state==='waiting_source'?'Продовжити публікацію':'Продовжити зі збереженого кроку',event=>working(event.currentTarget,async()=>{const result=await request('/autopilot/'+run.id+'/resume',{});if(!result.run?.id)throw Error('Сервер не підтвердив продовження запуску. Оновіть його стан.');state.runs=[result.run,...state.runs.filter(saved=>saved.id!==result.run.id)];renderResults();syncPreparedPreview();scheduleRefresh();await loadResults();})));
  }
  if(run.canSetDestination===true)actions.appendChild(button(run.selectedDomain?'Змінити донора':'Вказати донора',()=>openDestination(run)));
+ if(run.publicationParked&&run.canResumeParked!==true&&run.parkedResumeBlockedReason)card.appendChild(el('p','ap-inline-note',run.parkedResumeBlockedReason));
  if(!run.canSetDestination&&run.hasHtml&&['failed','uncertain','needs_attention','paused'].includes(run.state)&&run.destinationBlockedReason)card.appendChild(el('p','ap-inline-note',run.destinationBlockedReason));
  if(run.browserWindow&&run.browserMode!=='hidden')actions.appendChild(button('Показати вікно WordPress',event=>working(event.currentTarget,async()=>{try{await request('/autopilot/'+run.id+'/browser',{});}catch(error){if(['BROWSER_CLOSED','BROWSER_NOT_OPEN'].includes(error.code))throw Error('Вікно WordPress закрито. Натисніть «Продовжити зі збереженого кроку», щоб відкрити його знову.');throw error;}})));
  if(run.canDelete===true)actions.appendChild(button('Видалити',event=>working(event.currentTarget,()=>deleteRun(run)),'ap-button ap-secondary ap-delete-run'));
@@ -464,7 +478,7 @@ function renderPage(page,{isCurrent=()=>true}={}){
  append(text,el('h3','',page.title||'Опублікована сторінка'),link(page.fullUrl,page.fullUrl));if(!state.selected)text.appendChild(el('p','ap-page-meta',page.projectName));
  const name=verification.state==='ok'?'Перевірена':verification.state==='problem'?'Є проблеми':verification.state==='unknown'?'Потрібна перевірка':'Очікує перевірки';
  append(top,text,badge(name,verification.state==='ok'?'good':verification.state==='problem'?'error':'warning'));card.appendChild(top);
- const bottom=el('div','ap-page-bottom'),info=el('div','ap-verification');append(info,el('strong','',verification.checkedAt?'Перевірено '+date(verification.checkedAt):'Ще не перевірена'),el('div','',verification.summary||'Натисніть «Перевірити стан сторінок».'));
+ const bottom=el('div','ap-page-bottom'),info=el('div','ap-verification');append(info,el('strong','',verification.checkedAt?'Перевірено '+date(verification.checkedAt):'Ще не перевірена'),el('div','',verification.summary||'Натисніть «Перевірити опубліковані».'));
  const actions=el('div','ap-page-actions');append(actions,link('Відкрити ↗',page.fullUrl,'ap-button ap-secondary'),button('Замінити посилання',event=>working(event.currentTarget,()=>openReplacement(page,isCurrent))));
  actions.appendChild(linkReportControl(page.id));
  append(bottom,info,actions);card.appendChild(bottom);return card;
@@ -485,7 +499,7 @@ function renderSetup(){
  const missingAi=state.mode==='ai'&&!state.status?.aiConfigured,missingSource=!state.status?.source?.configured,sourceDraft=!!state.status?.source?.spreadsheetId;
  $('ap-setup').hidden=!state.selected||!state.status||(!missingAi&&!missingSource);
  $('ap-setup-title').textContent=missingAi?'Підготуйте генерацію сторінок':sourceDraft?'Підключіть акаунт Google':'Підключіть базу для публікації';
- $('ap-setup-copy').textContent=missingAi?'Збережіть ключ OpenAI у налаштуваннях або виберіть готовий HTML — для нього ключ не потрібен.':sourceDraft?'Таблиця й колонки налаштовані. Підключіть робочий або сервісний акаунт Google із доступом на читання.':'Додайте Google Таблицю із сайтами. Поки вона не підключена, підготовлений HTML збережеться й чекатиме публікації.';
+ $('ap-setup-copy').textContent=missingAi?'Збережіть ключ OpenAI на вкладці «OpenAI» у налаштуваннях і перевірте доступ до моделі.':sourceDraft?'Таблиця й колонки налаштовані. Підключіть робочий або сервісний акаунт Google із доступом на читання.':'Додайте Google Таблицю із сайтами. Поки вона не підключена, підготовлений HTML збережеться й чекатиме публікації.';
 }
 function previewSize(mobile){
  state.dialogMobile=mobile;$('ap-preview-frame').closest('.ap-preview-canvas').classList.toggle('is-mobile',mobile);
@@ -559,9 +573,9 @@ function updateStageActions(){
  let message='Публікація почнеться після вашого натискання.';
  if(state.stageLoading)message='Завантажуємо вибраний варіант…';
  else if(busy)message='Зберігаємо запит… Не потрібно надсилати його повторно.';
- else if(stage?.kind==='status')message=activeStates.has(run?.state)?'Підготовка виконується. Публікація чекає вашого перегляду.':'Автоматичного повтору немає. Виправте причину й продовжте збережений запуск нижче.';
+ else if(stage?.kind==='status')message=activeStates.has(run?.state)?'Підготовка виконується. Публікація чекає вашого перегляду.':(document.body.dataset.workspaceView==='compose'?'Автоматичного повтору немає. Поверніться до списку сторінок, щоб продовжити збережений запуск.':'Автоматичного повтору немає. Виправте причину й продовжте збережений запуск нижче.');
  else if(stage?.kind==='draft')message=getPending()?'Попередній запит ще не підтверджено. Скористайтеся кнопкою «Повторити збережений запит».':!draftReady?'Підтвердьте зміни HTML під формою перед публікацією.':state.status?.source?.configured?'Перевірте обидва розміри. Цей варіант готовий до публікації.':'Можна підтвердити публікацію зараз. HTML збережеться й чекатиме підключення бази сайтів.';
- else if(stage?.kind==='run')message=runReady?(state.status?.source?.configured?'Сторінку ще не опубліковано. Перевірте її й підтвердьте публікацію.':'Сторінку ще не опубліковано. Після підтвердження вона чекатиме підключення бази сайтів.'):run?.state==='awaiting_review'?'Відкрийте актуальний перегляд, щоб підтвердити цей варіант.':run?.state==='waiting_source'?'Публікацію підтверджено. Підключіть базу сайтів, щоб продовжити.':run?.state==='completed'?'Сторінку опубліковано. Перевірки завершено.':'Стан публікації показано в списку запусків нижче.';
+ else if(stage?.kind==='run')message=runReady?(state.status?.source?.configured?'Сторінку ще не опубліковано. Перевірте її й підтвердьте публікацію.':'Сторінку ще не опубліковано. Після підтвердження вона чекатиме підключення бази сайтів.'):run?.state==='awaiting_review'?'Відкрийте актуальний перегляд, щоб підтвердити цей варіант.':run?.state==='waiting_source'?'Публікацію підтверджено. Підключіть базу сайтів, щоб продовжити.':run?.state==='completed'?(run.publication?.state==='trashed'?'Сторінка в кошику WordPress.':window.pageposterDesktop?'Сторінку опубліковано. Ручна перевірка й рішення доступні у списку сторінок.':run.verification?.state==='ok'?'Сторінку опубліковано. Перевірки завершено.':'Сторінку опубліковано. Результат перевірки доступний у списку сторінок.'):(document.body.dataset.workspaceView==='compose'?'Стан публікації доступний у списку сторінок.':'Стан публікації показано в списку запусків нижче.');
  if(stage?.kind==='run'&&!busy&&run?.destinationMode==='manual'&&runReady)message='Сайт публікації: '+run.selectedDomain+' — почнемо після вашого натискання.';
  else if(stage?.kind==='run'&&!busy&&run?.canSetDestination&&!state.status?.source?.configured)message='Укажіть сайт вручну або підключіть таблицю. Сторінку вже збережено.';
  $('ap-stage-status').textContent=message;$('ap-preview-note').textContent=message;
@@ -580,7 +594,7 @@ async function loadPreparedRun(id,{automatic=false}={}){
 }
 function showPreparationState(run){
  const active=activeStates.has(run.state),titles={failed:'Не вдалося підготувати сторінку',uncertain:'Результат підготовки потребує перевірки',paused:'Підготовку призупинено',needs_attention:'Підготовка потребує уваги'};
- const title=active?'Готуємо вашу сторінку':titles[run.state]||labels[run.state],copy=active?'ШІ створює тексти й оформлення. Публікація почнеться після вашого підтвердження.':run.error?errorText(run.error):'Запуск збережено. Продовжте його вручну з картки нижче.';
+ const title=active?'Готуємо вашу сторінку':titles[run.state]||labels[run.state],copy=active?'ШІ створює тексти й оформлення. Публікація почнеться після вашого підтвердження.':run.error?errorText(run.error):(document.body.dataset.workspaceView==='compose'?'Запуск збережено. Поверніться до списку сторінок, щоб продовжити його.':'Запуск збережено. Продовжте його вручну з картки нижче.');
  clearStage(title,copy);state.autoPreviewRun=run.id;state.stage={kind:'status',runId:run.id,run,selection:state.selected};
  $('ap-stage').dataset.status=active?'loading':'error';$('ap-stage-title').textContent=title;$('ap-stage-caption').textContent=active?'Стан підготовки оновлюється автоматично.':'Підготовку зупинено. Ваші посилання й анкор збережено.';
  let settings=$('ap-stage-settings');if(!settings){settings=button('Перевірити підключення OpenAI',openAiSettings);settings.id='ap-stage-settings';$('ap-stage-empty').appendChild(settings);}settings.hidden=active||!needsAiSettings(run);updateStageActions();
@@ -1038,7 +1052,9 @@ async function init(){
  $('ap-reconciliation-refresh')?.addEventListener('click',()=>reconcileRequest(state.reconciliation));
  $('ap-reconciliation')?.addEventListener('close',()=>{if(!$('ap-reconciliation').open){state.reconciliation=null;const previous=state.focusReturn.get('ap-reconciliation');if(previous&&!previous.isConnected){const address=$('ap-reconciliation')._focusAddress,target=address?.queueItem?[...document.querySelectorAll('[data-queue-item]')].find(row=>row.dataset.queueItem===address.queueItem):[...document.querySelectorAll('[data-run-id]')].find(row=>row.dataset.runId===address?.runId);state.focusReturn.set('ap-reconciliation',target?.querySelector('[data-action=reconcile]'));}}});
  $('ap-support-download')?.addEventListener('click',downloadSupport);
- window.addEventListener('pageposter:queue-project-open',event=>{const id=event.detail?.projectId;if(state.projects.some(project=>project.id===id))selectProject(id,{composer:!!event.detail?.newPage}).catch(error=>showMessage(errorText(error),true));});
+ window.addEventListener('pageposter:queue-project-open',event=>{const id=event.detail?.projectId;if(event.detail?.newPage)openQueueComposer(id);else if(state.projects.some(project=>project.id===id&&!project.archived&&!project.trashed))selectProject(id).catch(error=>showMessage(errorText(error),true));});
+ window.addEventListener('pageposter:queue-project-create',()=>openQueueComposer(null,{allowCreate:true}));
+ $('ap-project-dialog').addEventListener('close',()=>{if(!$('ap-project-dialog').open)delete $('ap-project-dialog').dataset.composePage;});
  window.addEventListener('pageposter:replace-links',event=>openQueueReplacement(event.detail));
  window.addEventListener('pageposter:project-selected',()=>{state.queueReplacementSerial=(state.queueReplacementSerial||0)+1;if(state.replacement&&!state.replacement.isCurrent()){invalidateReplacement();if($('ap-replacement').open)closeDialog('ap-replacement');}});
  window.addEventListener('pageposter:queue-item-details',async event=>{
@@ -1048,14 +1064,14 @@ async function init(){
   catch(error){if(isCurrent())target.textContent='Не вдалося завантажити дії сторінки. '+errorText(error);}
  });
  window.addEventListener('pageposter:choose-donor',event=>openQueueDestination(event.detail));
- window.addEventListener('pageposter:project-imported',async()=>{try{const result=await request('/projects');state.projects=result.projects||[];renderProjects();renderHeading();await loadResults();}catch(error){showMessage('Проєкт імпортовано. '+errorText(error),true);}});
+ window.addEventListener('pageposter:project-imported',async()=>{try{const result=await request('/projects');storeProjects(result);renderProjects();renderHeading();await loadResults();}catch(error){showMessage('Проєкт імпортовано. '+errorText(error),true);}});
  window.addEventListener('pageposter:queue-updated',()=>{loadResults().catch(()=>{});});
  window.addEventListener('pageposter:inspector-invalidated',()=>{if(state.replacement&&!state.replacement.isCurrent()){invalidateReplacement();if($('ap-replacement').open)closeDialog('ap-replacement');showMessage('Сторінка змінилася. Відкрийте її поточні дані перед заміною посилань.');}});
  window.addEventListener('pageposter:queue-check-project',async event=>{const {projectId,control}=event.detail||{};if(!projectId||!control)return;await working(control,async()=>{const result=await request('/projects/'+encodeURIComponent(projectId)+'/check-pages',{});trackJobs(result.jobs,projectId);await loadResults();window.dispatchEvent(new CustomEvent('pageposter:queue-updated'));showMessage(result.queued?'Перевірка опублікованих сторінок запущена.':'Нових перевірок не додано; поточні результати збережено.');});});
- window.addEventListener('pageposter:recovery-restored',()=>{
-  state.restartRequired=true;state.busy=true;state.load++;clearTimeout(state.poll);state.previewSerial++;state.fileSerial++;state.stageSerial++;invalidateReplacement();updateStatus();
-  document.querySelectorAll('button,input,select,textarea').forEach(control=>{if(!control.closest('#ap-backup')&&!control.hasAttribute('data-close'))control.disabled=true;});
-  showMessage('Копію відновлено. Перезапустіть PagePoster перед продовженням роботи.');
+ for(const recoveryEvent of ['pageposter:recovery-restored','pageposter:recovery-restart-required'])window.addEventListener(recoveryEvent,()=>{
+  state.recoveryFailed=recoveryEvent==='pageposter:recovery-restart-required';state.restartRequired=true;state.busy=true;state.load++;clearTimeout(state.poll);state.previewSerial++;state.fileSerial++;state.stageSerial++;invalidateReplacement();updateStatus();
+  document.querySelectorAll('button,input,select,textarea').forEach(control=>{if(!control.closest('#ap-backup')&&!control.hasAttribute('data-close')&&!(control.id.endsWith('-close')&&control.id!=='pq-dashboard-close'))control.disabled=true;});
+  showMessage(state.recoveryFailed?'Відновлення не підтверджено. Перезапустіть PagePoster перед продовженням роботи.':'Копію відновлено. Перезапустіть PagePoster перед продовженням роботи.',state.recoveryFailed);
  });
  $('ap-stage-desktop').addEventListener('click',()=>stageSize(false));$('ap-stage-mobile').addEventListener('click',()=>stageSize(true));
  $('ap-stage-expand').addEventListener('click',()=>{if(state.stage?.html&&!state.stageLoading)showPreview(state.stage.html);});
@@ -1077,7 +1093,7 @@ async function init(){
  if(typeof ResizeObserver==='function'){const sizes=new ResizeObserver(fitAllPreviews);sizes.observe($('ap-stage-canvas'));sizes.observe($('ap-preview-frame').closest('.ap-preview-canvas'));}
 
  $('ap-replacement').addEventListener('cancel',invalidateReplacement);
- $('ap-setup-open').addEventListener('click',openSettings);
+ $('ap-setup-open').addEventListener('click',()=>state.mode==='ai'&&!state.status?.aiConfigured?openAiSettings():openSourceSettings());
  $('ap-search').addEventListener('input',renderResults);$('ap-filter').addEventListener('change',renderResults);
  $('ap-preview-mobile').addEventListener('click',()=>previewSize(true));$('ap-preview-desktop').addEventListener('click',()=>previewSize(false));
   readWorkspace();
@@ -1092,7 +1108,7 @@ async function init(){
  document.querySelectorAll('[name=chromeMode]').forEach(input=>input.addEventListener('change',()=>{if(state.mode==='html')htmlChanged();else editableChanged();}));
  ['customerHtml','htmlBaseUrl','htmlBrand','htmlBrandUrl'].forEach(name=>$('ap-launch-form').elements[name].addEventListener('input',htmlChanged));
  $('ap-html-preview').addEventListener('click',previewCustomerHtml);$('ap-html-file').addEventListener('change',readHtmlFile);
- $('ap-project-form').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,name=form.elements.projectName.value.trim(),workflowType=form.elements.workflowType?.value;if(!name)return;await working(form.querySelector('button[type=submit]'),async()=>{const result=await request('/projects',{name,...(workflowType?{workflowType}:{})});state.projects.push(result.project);form.reset();closeDialog('ap-project-dialog');await selectProject(result.project.id);});});
+ $('ap-project-form').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,name=form.elements.projectName.value.trim(),workflowType=form.elements.workflowType?.value,composer=$('ap-project-dialog').dataset.composePage==='true';if(!name)return;await working(form.querySelector('button[type=submit]'),async()=>{const result=await request('/projects',{name,...(workflowType?{workflowType}:{})});state.projects.push(result.project);form.reset();closeDialog('ap-project-dialog');if(composer&&$('pq-dashboard')?.open)$('pq-dashboard').close();await selectProject(result.project.id,{composer});});});
  const checkAI=button('Перевірити доступ до моделі',event=>working(event.currentTarget,async()=>{try{const data=await request('/api/ai/check',{});showMessage(data.model+': '+data.message,false,$('ap-settings-note'));}catch(error){showMessage(errorText(error),true,$('ap-settings-note'));}}));checkAI.id='ap-ai-check';$('ap-key-form').after(checkAI);
  $('ap-key-form').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,keyValue=form.elements.apiKey.value.trim();if(!keyValue)return showMessage('Вставте ключ OpenAI API.',true,$('ap-settings-note'));const control=form.querySelector('button');control.disabled=true;try{await request('/api/ai/connect',{apiKey:keyValue});form.reset();await refreshStatus();showMessage('Ключ OpenAI збережено.',false,$('ap-settings-note'));}catch(error){showMessage(errorText(error),true,$('ap-settings-note'));}finally{control.disabled=false;}});
  $('ap-browser-form').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,control=form.querySelector('button'),serial=state.settingsSerial;control.disabled=true;try{const result=await request('/autopilot/browser-settings',{mode:form.elements.browserMode.value});if(!['visible','hidden'].includes(result.browserMode))throw Error('Сервер не підтвердив режим браузера.');state.status={...state.status,browserMode:result.browserMode};if(serial===state.settingsSerial)showMessage('Режим браузера збережено для нових запусків.',false,$('ap-settings-note'));}catch(error){if(serial===state.settingsSerial)showMessage(errorText(error),true,$('ap-settings-note'));}finally{control.disabled=false;}});
@@ -1100,7 +1116,7 @@ async function init(){
  $('ap-browser-mode').addEventListener('change',()=>{if(window.pageposterDesktop)$('ap-browser-form').querySelector('button').hidden=$('ap-browser-mode').value===(state.status?.browserMode||'visible');});
  $('ap-settings').addEventListener('close',()=>{if(!$('ap-settings').open)state.settingsSerial++;});
  $('ap-site-selection-open')?.addEventListener('click',openSiteSelection);$('ap-site-selection-form')?.addEventListener('submit',saveSiteSelection);$('ap-site-selection')?.addEventListener('close',()=>{if(!$('ap-site-selection').open)state.selectionSession=null;});
- try{const [projects,status]=await Promise.all([request('/projects'),request('/autopilot/status')]);state.projects=projects.projects||[];state.status=status;updateStatus();await selectProject(state.savedSelection===null?null:state.projects.find(p=>!p.archived&&p.id===state.savedSelection)?.id||state.projects.find(p=>!p.archived)?.id||null);}
+ try{const [projects,status]=await Promise.all([request('/projects'),request('/autopilot/status')]);storeProjects(projects);state.status=status;updateStatus();await selectProject(state.savedSelection===null?null:state.projects.find(p=>!p.archived&&p.id===state.savedSelection)?.id||state.projects.find(p=>!p.archived)?.id||null);}
  catch(error){$('ap-title').textContent='Підключення до PagePoster';$('ap-subtitle').textContent='Для автоматичної генерації й публікації потрібен запущений сервер PagePoster.';$('ap-connection-copy').textContent='Немає зв’язку із сервером';showMessage(errorText(error),true);}
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();

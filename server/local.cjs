@@ -7,6 +7,7 @@ const { pathToFileURL } = require('node:url');
 const root = path.join(__dirname,'..','dist');
 const assetNames = new Set(['index.html','autopilot.html','autopilot.css','autopilot-ui.js','autopilot-recovery.js','project-queue-ui.js','project-queue.css','proxy-settings-ui.js','proxy-check-ui.js','workspace-ui.js','workspace.css','google-account-ui.js','google-account.css','styles.css','purify.min.js','csstree.js','html-import.js','html-package.js','project-table.js','project-normalizer.js','generation-options.js','page-runtime.js','generator.js','link-placements.js','design-variants.js','app.js','ai-core.js','ai-ui.js','plugin-download.js','run-ui.js','campaign-ui.js','lifecycle-ui.js','lifecycle.css','PagePoster.html']);
 const types = {'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
+const recoveryRestart = {code:'RECOVERY_RESTART_REQUIRED',restartRequired:true,error:'Перезапустіть PagePoster, щоб продовжити роботу.'};
 async function createLocalServer({env=process.env,fetchImpl=globalThis.fetch,lifecycle: lifecycleOptions}={}) {
   const {createAIHandler} = await import(pathToFileURL(path.join(__dirname,'ai.mjs')).href);
   let budget=null;
@@ -33,7 +34,7 @@ async function createLocalServer({env=process.env,fetchImpl=globalThis.fetch,lif
     const port=serverPort(req), host=req.headers.host;
     if (!host || !['127.0.0.1:'+port,'localhost:'+port,...(publicOrigin?[new URL(publicOrigin).host]:[])].includes(host)) {res.writeHead(403);res.end('Forbidden host');return;}
     let url;try{url=new URL(req.url,publicOrigin&&host===new URL(publicOrigin).host?publicOrigin:'http://'+host);}catch{res.writeHead(400);res.end('Bad request');return;}
-    if(url.pathname.startsWith('/api/')&&recoveryBusy&&!url.pathname.startsWith('/api/recovery/')){res.writeHead(503,{'Content-Type':'application/json'});res.end(JSON.stringify({code:'RECOVERY_BUSY',error:restartRequired?'Відновлення завершено. Перезапусти PagePoster.':'Триває створення або відновлення копії. Спробуй за хвилину.'}));return;}
+    if(url.pathname.startsWith('/api/')&&recoveryBusy&&!url.pathname.startsWith('/api/recovery/')){res.writeHead(503,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(restartRequired?recoveryRestart:{code:'RECOVERY_BUSY',error:'Триває створення або відновлення копії. Спробуйте за хвилину.'}));return;}
     if(url.pathname.startsWith('/api/')) {
       const controller=new AbortController();
       const cancel=()=>{if(!res.writableEnded)controller.abort();};
@@ -64,6 +65,7 @@ async function createLocalServer({env=process.env,fetchImpl=globalThis.fetch,lif
   async function recoveryRequest(request){
     const url=new URL(request.url);if(request.method!=='POST'||request.headers.get('origin')!==url.origin||request.headers.get('X-PagePoster-Request')!=='1'||request.headers.get('sec-fetch-site')==='cross-site')return localJson({error:'Відкрий PagePoster у його власній вкладці.'},403);
     if(!lifecycle||!masterKey)return localJson({code:'KEY_REQUIRED',error:'Захищене сховище не налаштовано.'},400);
+    if(restartRequired)return localJson(recoveryRestart,503);
     if(recoveryBusy)return localJson({code:'RECOVERY_BUSY',error:'Інша операція з копією ще триває.'},409);
     recoveryBusy=true;let resume;const action=url.pathname.split('/').at(-1);
     try{
@@ -75,8 +77,14 @@ async function createLocalServer({env=process.env,fetchImpl=globalThis.fetch,lif
       if(action==='inspect')return localJson(await recovery.inspectFullBackup(options));
       if(body.confirmed!==true)return localJson({code:'VALIDATION',error:'Спочатку переглянь і підтвердь відновлення.'},400);
       const inspected=await recovery.inspectFullBackup(options);if(!inspected.canRestore)return localJson({code:'RESTORE_NOT_EMPTY',error:'Відновлення доступне лише у порожню базу.'},409);
-      await server.closeResources();restartRequired=true;const result=await recovery.restoreFullBackup(options);return localJson(result);
-    }catch(error){const messages={BACKUP_PASSWORD_INVALID:'Неправильний пароль, пошкоджена копія або пароль коротший за 12 символів.',BACKUP_INVALID:'Файл не є сумісною повною копією PagePoster.',BACKUP_TOO_LARGE:'Повна копія перевищує ліміт 512 МіБ даних або 150 МіБ зашифрованого файлу. Розмір включає базу, історію версій і скриншоти.',RESTORE_NOT_EMPTY:'Відновлення доступне лише у порожню базу.'};return localJson({code:messages[error.code]?error.code:'BACKUP_FAILED',error:messages[error.code]||'Не вдалося завершити операцію. Робочі дані не перезаписано.'},400);}
+      // Closing can fail after some database handles have already been released.
+      restartRequired=true;
+      await server.closeResources();
+      return localJson(await recovery.restoreFullBackup(options));
+    }catch(error){
+      if(restartRequired)return localJson({...recoveryRestart,restored:false,error:'Відновлення не підтверджено. Перезапустіть PagePoster перед новою спробою.'},503);
+      const messages={BACKUP_PASSWORD_INVALID:'Неправильний пароль, пошкоджена копія або пароль коротший за 12 символів.',BACKUP_INVALID:'Файл не є сумісною повною копією PagePoster.',BACKUP_TOO_LARGE:'Повна копія перевищує ліміт 512 МіБ даних або 150 МіБ зашифрованого файлу. Розмір включає базу, історію версій і скриншоти.',RESTORE_NOT_EMPTY:'Відновлення доступне лише у порожню базу.'};return localJson({code:messages[error.code]?error.code:'BACKUP_FAILED',error:messages[error.code]||'Не вдалося завершити операцію. Робочі дані не перезаписано.'},400);
+    }
     finally{if(!restartRequired){resume?.();recoveryBusy=false;}}
   }
   server.lifecycle=lifecycle;server.aiBudget=budget;

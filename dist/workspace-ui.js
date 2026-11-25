@@ -13,6 +13,7 @@ function actionMenu(id,label,ids){
 }
 function simplifyDesktop(){
  if(!window.pageposterDesktop)return;
+ const footer=$('ap-footer-copy');if(footer)footer.textContent='Після публікації відкрийте сторінку в списку для ручної перевірки.';
  // Both import controls opened exactly the same form. Keep the persistent sidebar entry.
  $('pq-import-more')?.remove();$('ap-runtime').hidden=true;
  actionMenu('ap-stage-export-menu','HTML та експорт',['ap-stage-copy','ap-stage-manual-export']);
@@ -35,7 +36,7 @@ function settings(){
 }
 function init(){
  document.documentElement.lang='uk';
- const labels={'pq-dashboard-open':'Сторінки й черги','pq-import-open':'Імпорт проєкту','ap-all':'Усі сторінки','ap-settings-open':'Налаштування','ap-site-selection-open':'Типові вимоги','ap-site-selection-title':'Вимоги для нових сторінок','ap-settings-title':'Налаштування','ap-check-pages':'Перевірити опубліковані'};
+ const labels={'pq-dashboard-open':'Сторінки й черги','pq-import-open':'Імпорт проєкту','ap-all':'Усі сторінки','ap-settings-open':'Налаштування','ap-site-selection-title':'Вимоги для нових сторінок','ap-settings-title':'Налаштування'};
  for(const [id,label] of Object.entries(labels))if($(id))$(id).textContent=label;
  const manage=$('ap-projects-manage');manage.textContent='⋯';manage.title='Закриті проєкти й кошик';manage.setAttribute('aria-label','Керувати проєктами');manage.className='ap-icon';document.querySelector('.ap-project-label').appendChild(manage);
  const caption=document.querySelector('.ap-project-label > span');if(caption)caption.textContent='ПРОЄКТИ';

@@ -4,7 +4,7 @@ const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),asse
 const root=path.resolve(__dirname,'../..');
 const {_electron}=require(path.join(root,'.desktop-build/production/node_modules/playwright-core'));
 const {cleanupSmoke}=require(path.join(root,'scripts/desktop-smoke-control.cjs'));
-const out=path.join(root,'docs/user-guide-images'),clone=value=>JSON.parse(JSON.stringify(value));
+const out=path.join(root,'docs/user-guide-images'),proofDir=path.join(root,'.desktop-build/guide-ua/v1.1.1'),clone=value=>JSON.parse(JSON.stringify(value));
 async function main(){
  fs.mkdirSync(out,{recursive:true});
  const testRoot=fs.mkdtempSync(path.join(os.tmpdir(),'pageposter-guide-ua-'));
@@ -13,13 +13,15 @@ async function main(){
  for(const key of ['OPENAI_API_KEY','PAGEPOSTER_ACCESS_TOKEN','PAGEPOSTER_DESKTOP_CONFIG','PAGEPOSTER_DATA_DIR','PAGEPOSTER_KEY_DIR','NODE_OPTIONS','ELECTRON_RUN_AS_NODE'])delete env[key];
  let app,failure=null,phase='ready',overview=null,project=null,originalOverview=null,mockSettings=false,googleConfigured=false;const captures=[],blocked=[];
  try{
-  const executablePath=process.env.PAGEPOSTER_GUIDE_EXE||path.resolve(root,'../PagePoster Desktop/PagePoster.exe');
+  const executablePath=process.env.PAGEPOSTER_GUIDE_EXE;
+  const expectedBuildId=process.env.PAGEPOSTER_GUIDE_BUILD_ID;
+  assert.ok(executablePath&&expectedBuildId,'Set PAGEPOSTER_GUIDE_EXE and PAGEPOSTER_GUIDE_BUILD_ID for the candidate build.');
   app=await _electron.launch({executablePath,env,timeout:45000});
   const page=await app.firstWindow();await page.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\/$/);await page.locator('#pq-dashboard[open]').waitFor();
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setBounds({x:20,y:20,width:1440,height:1000}));
   page.setDefaultTimeout(12000);const origin=new URL(page.url()).origin;
   const info=await page.evaluate(()=>pageposterDesktop.info());assert.match(await page.evaluate(()=>navigator.language),/^uk/);
-  if(process.env.PAGEPOSTER_GUIDE_BUILD_ID)assert.equal(info.buildId,process.env.PAGEPOSTER_GUIDE_BUILD_ID);
+  assert.equal(info.buildId,expectedBuildId);
   const api=async(route,body)=>page.evaluate(async({route,body})=>{const response=await fetch('/api/lifecycle'+route,{method:body?'POST':'GET',headers:{'Content-Type':'application/json','X-PagePoster-Request':'1'},...(body?{body:JSON.stringify(body)}:{})});const data=await response.json();if(!response.ok)throw Error(JSON.stringify(data));return data;},{route,body});
   await page.context().route('**/*',async route=>{
    const request=route.request(),url=new URL(request.url());
@@ -82,6 +84,25 @@ async function main(){
   await page.locator('#ga-user').scrollIntoViewIfNeeded();await capture('04-google-account','#ga-user');
   await page.locator('#ap-source-advanced').evaluate(el=>el.open=true);await page.locator('#ap-source-advanced').scrollIntoViewIfNeeded();await capture('05-google-columns','#ap-source-advanced');
   await closeSettings();
+  phase='first-page-demo';
+  await page.getByRole('button',{name:'Додати одну сторінку',exact:true}).click();
+  await page.locator('#ap-project-dialog[open]').waitFor();
+  assert.equal((await api('/projects')).projects.length,0);
+  await page.locator('#ap-project-form [name=projectName]').fill('Навчальний проєкт · генерація');
+  await capture('28-new-project','#ap-project-dialog');
+  await page.locator('#ap-project-form button[type=submit]').click();
+  await page.locator('#ap-composer').waitFor();
+  await page.locator('#ap-editorial-language').selectOption('el');
+  await page.locator('#ap-card-count').fill('4');
+  await page.locator('#ap-add-link').click();
+  const demoLinks=[['https://offer.example/travel','План поїздки'],['https://tips.example/travel','Поради для мандрівників']];
+  for(const [i,[url,anchor]] of demoLinks.entries()){
+   await page.locator('[name=linkUrl]').nth(i).fill(url);
+   await page.locator('[name=linkAnchor]').nth(i).fill(anchor);
+  }
+  await page.locator('#ap-ai-inputs').scrollIntoViewIfNeeded();await capture('24-generation','#ap-ai-inputs',{endSelector:'#ap-launch'});
+  await page.getByRole('button',{name:'Сторінки й черги',exact:true}).click();
+  phase='ready';
   await page.locator('#pq-import-open').click();await capture('06-import','label:has(#pq-auto-file)');
   const imported=page.waitForResponse(r=>new URL(r.url()).pathname.endsWith('/project-queue/import'));
   await page.locator('#pq-auto-file').setInputFiles(path.join(root,'docs/user-guide-examples/02-html-project.zip'));
@@ -94,6 +115,8 @@ async function main(){
   const siteNames=['ua-travel.example','gb-travel.example','nz-travel.example'];
   for(const [i,item] of project.items.entries())await api('/autopilot/'+item.runId+'/destination',{baseUrl:'https://'+siteNames[i]+'/',username:'training-only',password:'training-only'});
   originalOverview=await api('/project-queue');project=originalOverview.projects.find(p=>p.items.length===3);
+  assert.ok(project);
+  originalOverview={...originalOverview,projects:[project]};
   overview=clone(originalOverview);overview.manualPublishedReview=true;
   const display=overview.projects.find(p=>p.projectId===project.projectId);display.name='Навчальний проєкт · 3 сторінки';
   for(const item of display.items){item.canEditRequirements=true;item.canEditLanguage=true;}
@@ -121,11 +144,11 @@ async function main(){
   for(const item of display.items.slice(1)){item.state='queued';item.stage='selecting';item.canApprove=false;}
   overview.publication={active:1,waiting:2,concurrency:1,owner:{runId:first.runId,projectId:project.projectId,title:first.title,state:'publishing'}};
   Object.assign(first,{state:'publishing',stage:'publishing',canApprove:false,canSetDestination:false});await refresh();await resetScroll();await capture('13-progress','.pq-project',{endSelector:'[data-queue-item="'+first.id+'"]'});
-  phase='parking-demo';Object.assign(first,{state:'needs_attention',stage:'publishing',canPark:true,publication:{state:'manual_action',postId:315,checkpoint:'draft'},error:{code:'BROWSER_CAPTCHA_REQUIRED',message:'Пройдіть CAPTCHA у відкритому вікні WordPress, потім натисніть «Продовжити».'}});display.counts={...display.counts,publishing:0,attention:1};
+  phase='parking-demo';Object.assign(first,{state:'needs_attention',stage:'publishing',canPark:true,canRetry:true,publication:{state:'manual_action',postId:315,checkpoint:'draft'},error:{code:'BROWSER_CAPTCHA_REQUIRED',message:'Пройдіть CAPTCHA у відкритому вікні WordPress, потім натисніть «Продовжити».'}});display.counts={...display.counts,publishing:0,attention:1};
   await refresh();await resetScroll();await row.locator('[data-action=park]').waitFor();await capture('27-park-action','[data-queue-item="'+first.id+'"]');
-  phase='parked-demo';Object.assign(first,{canPark:false,publicationParked:true});overview.publication={active:0,waiting:2,concurrency:1};
+  phase='parked-demo';Object.assign(first,{canPark:false,canRetry:false,publicationParked:true,canResumeParked:true,parkedResumeBlockedReason:''});overview.publication={active:0,waiting:2,concurrency:1};
   await refresh();await resetScroll();await row.locator('[data-action=resume-parked]').waitFor();await capture('25-parked','[data-queue-item="'+first.id+'"]');
-  phase='published-demo';Object.assign(first,{state:'completed',stage:'completed',wpId:315,publishedStatus:'publish',fullUrl:'https://ua-travel.example/putivnyk/',error:null,publicationParked:false,publication:{state:'published',postId:315,checkpoint:'published'},manualReview:{state:'pending',canTrash:true,canOpenEditor:true,editorUrl:'https://ua-travel.example/wp-admin/post.php?post=315&action=edit'}});display.counts={...display.counts,publishing:0,attention:0,completed:1};overview.publication={active:0,waiting:0,concurrency:1};await refresh();
+  phase='published-demo';Object.assign(first,{state:'completed',stage:'completed',wpId:315,publishedStatus:'publish',fullUrl:'https://ua-travel.example/putivnyk/',error:null,publicationParked:false,canResumeParked:false,publication:{state:'published',postId:315,checkpoint:'published'},manualReview:{state:'pending',canTrash:true,canOpenEditor:true,editorUrl:'https://ua-travel.example/wp-admin/post.php?post=315&action=edit'}});display.counts={...display.counts,publishing:0,attention:0,completed:1};overview.publication={active:0,waiting:0,concurrency:1};await refresh();
   await resetScroll();await row.locator('[data-action=published-review]').evaluate(el=>el.click());await capture('14-manual-review','#pq-published-review');await page.locator('#pq-published-review-close').click();
   phase='approved-demo';first.manualReview.state='approved';await refresh();await capture('15-approved','[data-queue-item="'+first.id+'"] td:nth-child(5)');
   phase='trash-retry-demo';Object.assign(first.manualReview,{state:'trash_failed',retryTrashRevision:3,trashMessage:'WordPress підтвердив, що сторінка досі опублікована без змін. Відхиліть її ще раз для перенесення в кошик.'});await refresh();await resetScroll();
@@ -137,27 +160,11 @@ async function main(){
   await page.locator('#ap-settings-open').click();await page.locator('[data-settings-tab=advanced]').click();await page.locator('#ap-backup-open').click();await capture('19-backup','#ap-backup-export-form');await page.locator('#ap-backup-close').click();
   await page.locator('[data-settings-tab=proxy]').click();await capture('20-proxy','#ap-proxy-form',{maxHeight:610});await closeSettings();
   await section.locator('.pq-project-heading .pq-more').evaluate(el=>el.open=true);await capture('21-project-actions','.pq-project-heading .pq-more[open] > div');
-  phase='generation-demo';overview=null;
-  await page.locator('#pq-dashboard').evaluate(el=>el.close());
-  await page.locator('#ap-project-dialog').evaluate(el=>el.showModal());
-  await page.locator('#ap-project-form [name=projectName]').fill('Навчальний проєкт · генерація');
-  await page.locator('#ap-project-form button[type=submit]').click();
-  await page.locator('#pq-dashboard[open] #pq-dashboard-close').click();
-  await page.locator('#ap-composer').waitFor();
-  await page.locator('#ap-editorial-language').selectOption('el');
-  await page.locator('#ap-card-count').fill('4');
-  await page.locator('#ap-add-link').click();
-  const demoLinks=[['https://offer.example/travel','План поїздки'],['https://tips.example/travel','Поради для мандрівників']];
-  for(const [i,[url,anchor]] of demoLinks.entries()){
-   await page.locator('[name=linkUrl]').nth(i).fill(url);
-   await page.locator('[name=linkAnchor]').nth(i).fill(anchor);
-  }
-  await page.locator('#ap-ai-inputs').scrollIntoViewIfNeeded();await capture('24-generation','#ap-ai-inputs');
   assert.deepEqual(blocked,[],'The guide should not attempt external requests or writes outside the demo fixture endpoints');
-  assert.equal(captures.length,27);
+  assert.equal(captures.length,28);
   for(const {file} of captures)fs.copyFileSync(path.join(staged,file),path.join(out,file));
   const proof={buildId:info.buildId,locale:await page.evaluate(()=>navigator.language),emptyProfile,demo:true,isolated:true,externalRequests:blocked,captures};
-  fs.mkdirSync(path.join(root,'.desktop-build/guide-ua'),{recursive:true});fs.writeFileSync(path.join(root,'.desktop-build/guide-ua/capture-proof.json'),JSON.stringify(proof,null,2));
+  fs.mkdirSync(proofDir,{recursive:true});fs.writeFileSync(path.join(proofDir,'capture-proof.json'),JSON.stringify(proof,null,2));
   console.log(JSON.stringify({buildId:proof.buildId,locale:proof.locale,emptyProfile,captures:captures.length,isolated:true,externalRequests:blocked.length}));
  }catch(error){failure=error;throw error;}finally{await cleanupSmoke(app,{failure});}
 }

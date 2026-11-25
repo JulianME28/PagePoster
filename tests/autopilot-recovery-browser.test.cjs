@@ -61,6 +61,37 @@ test('an uncertain restore response never reports success or permits a blind rep
  const donor=await runtime(t,{project:true}),backup=await donor.request('export',{passphrase});const {page,calls}=await workspace(t);
  await page.route('**/api/recovery/restore',route=>route.fulfill({status:503,contentType:'application/json',body:'{"error":"Результат восстановления не подтверждён"}'}));
  await chooseBackup(page,backup);await page.locator('#ap-backup-inspect').click();await page.locator('#ap-backup-review').waitFor();await page.locator('#ap-backup-ack').check();await page.locator('#ap-backup-confirm').click();await page.locator('#ap-backup-notice.error').waitFor();assert.equal(await page.locator('#ap-backup-confirm').isDisabled(),true);assert.equal(calls.filter(c=>c.action==='restore').length,1);assert.doesNotMatch(await page.locator('#ap-backup-notice').textContent(),/успішно|відновлено/i);
+ assert.match(await page.locator('#ap-backup-notice').textContent(),/перезапустіть PagePoster/i);
+ assert.equal(await page.locator('#ap-backup-inspect').isDisabled(),true);
+ assert.equal(await page.locator('#ap-backup-export').isDisabled(),true);
+});
+
+test('a restart-required restore error freezes the workspace without implying success',options,async t=>{
+ const donor=await runtime(t,{project:true}),backup=await donor.request('export',{passphrase});const {page}=await workspace(t);
+ await page.evaluate(()=>window.addEventListener('pageposter:recovery-restored',()=>document.body.dataset.restored='true'));
+ await page.route('**/api/recovery/restore',route=>route.fulfill({status:503,json:{restored:false,restartRequired:true,code:'RECOVERY_RESTART_REQUIRED',error:'Відновлення не підтверджено. Перезапустіть PagePoster перед новою спробою.'}}));
+ await chooseBackup(page,backup);await page.locator('#ap-backup-inspect').click();await page.locator('#ap-backup-review').waitFor();
+ await page.locator('#ap-backup-ack').check();await page.locator('#ap-backup-confirm').click();
+ await page.locator('#ap-backup-notice.error').waitFor();
+ assert.match(await page.locator('#ap-backup-notice').textContent(),/перезапустіть PagePoster/i);
+ for(const id of ['ap-backup-inspect','ap-backup-export','ap-backup-confirm','ap-backup-file','ap-backup-import-password','ap-backup-ack'])assert.ok(await page.locator('#'+id).isDisabled(),id);
+ assert.equal(await page.locator('#ap-backup-import-password').inputValue(),'');
+ assert.equal(await page.locator('#ap-backup-file').inputValue(),'');
+ await page.locator('#ap-backup-close').click();
+ assert.ok(await page.locator('#ap-settings-open').isDisabled());
+ assert.equal(await page.locator('body').getAttribute('data-restored'),null);
+ assert.match(await page.locator('#ap-notice.error').textContent(),/перезапустіть PagePoster/i);
+});
+
+test('a confirmed server rejection leaves backup inspection available',options,async t=>{
+ const donor=await runtime(t,{project:true}),backup=await donor.request('export',{passphrase});const {page}=await workspace(t);
+ await page.route('**/api/recovery/restore',route=>route.fulfill({status:409,json:{code:'RESTORE_NOT_EMPTY',error:'Відновлення доступне лише в порожню базу.'}}));
+ await chooseBackup(page,backup);await page.locator('#ap-backup-inspect').click();await page.locator('#ap-backup-review').waitFor();
+ await page.locator('#ap-backup-ack').check();await page.locator('#ap-backup-confirm').click();
+ await page.locator('#ap-backup-notice.error').waitFor();
+ assert.match(await page.locator('#ap-backup-notice').textContent(),/порожню базу/i);
+ assert.equal(await page.locator('#ap-backup-import-password').isEnabled(),true);
+ assert.equal(await page.locator('#ap-backup-confirm').isDisabled(),true);
 });
 
 test('export keeps its password fixed while running and late restore completion freezes a reopened dialog',options,async t=>{

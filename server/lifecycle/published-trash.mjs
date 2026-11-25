@@ -17,10 +17,21 @@ export function createPublishedTrash({store,publicationTurn,browser,hasActivePag
   if(saved?.mode!=='browser'||saved.status!=='publish'||saved.postType!=='page'||saved.postId!==page.wpId||saved.url!==page.fullUrl||saved.title!==page.title||typeof saved.content!=='string'||!saved.contentHash)return null;
   return {site,saved,sourceBinding:nativeUpdateSourceBinding(run)};
  }
+ function staleUncertain(record,page){
+  return !!(record&&record.pageRevision!==page.revision&&(record.state==='uncertain'||pending(record)&&record.phase!=='prepared'));
+ }
+ function running(record){return record?.state==='running'||record?.state==='queued'&&publicationTurn.owner()?.id===record.id;}
+ function sameAttempt(current,record){
+  return current?.state==='running'&&current.pageRevision===record.pageRevision&&current.projectId===record.projectId&&
+   current.originRunId===record.originRunId&&current.siteId===record.siteId&&current.postId===record.postId&&
+   current.url===record.url&&current.contentHash===record.contentHash&&isDeepStrictEqual(current.sourceBinding,record.sourceBinding);
+ }
  function view(page,run){
   if(!page?.fullUrl&&page?.lifecycleState!=='trashed')return null;
   const record=get(page.id);
   if(record?.state==='completed'&&page.lifecycleState==='trashed')return {state:'trashed',canTrash:false};
+  if(running(record))return {state:'trash_queued',canTrash:false};
+  if(staleUncertain(record,page))return {state:'trash_uncertain',canTrash:false,trashMessage:'Сторінка змінилася, поки WordPress підтверджував кошик. Перевірте стан у WordPress.'};
   const canTrash=!!target(page,run);
   if(record?.pageRevision!==page.revision)return {canTrash};
   if(pending(record))return {state:'trash_queued',canTrash:false};
@@ -42,19 +53,25 @@ export function createPublishedTrash({store,publicationTurn,browser,hasActivePag
  function schedule(page,run,expectedTrashRevision){
   const previous=get(page.id);
   if(pending(previous)&&previous.pageRevision===page.revision)return view(page,run);
+  if(running(previous))fail('CONFLICT','Дочекайтеся завершення поточної дії з кошиком WordPress.');
   const destination=target(page,run);
   if(!destination)fail('CONFLICT','Для перенесення в кошик потрібна сторінка PagePoster зі збереженим доступом до WordPress.');
   if(hasWrite(page))fail('CONFLICT','Дочекайтеся завершення поточних змін сторінки.');
-  if(needsFreshDecline(previous)&&(previous.revision!==expectedTrashRevision||previous.pageRevision!==page.revision))fail('CONFLICT','Оновіть рішення після підтвердження стану сторінки у WordPress.');
-  if(previous?.state==='uncertain'&&previous.pageRevision!==page.revision)fail('CONFLICT','Сторінка змінилася, поки WordPress підтверджував кошик.');
-  const patch={requireFreshDecline:needsFreshDecline(previous),pageId:page.id,pageRevision:page.revision,originRunId:run.id,siteId:page.siteId,postId:page.wpId,url:page.fullUrl,contentHash:destination.saved.contentHash,sourceBinding:destination.sourceBinding,
+  if(staleUncertain(previous,page))fail('CONFLICT','Сторінка змінилася, поки WordPress підтверджував кошик.');
+  // Positive proof of a still-published page settles the earlier attempt. An
+  // explicit decline from the current revision starts a new, exactly bound one.
+  const oldPublishedProof=previous?.state==='failed'&&previous.phase==='published_verified'&&previous.pageRevision!==page.revision&&
+   previous.originRunId===run.id&&previous.siteId===page.siteId&&previous.postId===page.wpId&&previous.url===page.fullUrl;
+  const freshDeclineRequired=needsFreshDecline(previous)&&!oldPublishedProof;
+  if(oldPublishedProof?expectedTrashRevision!==undefined:freshDeclineRequired&&(previous.revision!==expectedTrashRevision||previous.pageRevision!==page.revision))fail('CONFLICT','Оновіть рішення після підтвердження стану сторінки у WordPress.');
+  const patch={requireFreshDecline:freshDeclineRequired,pageId:page.id,pageRevision:page.revision,originRunId:run.id,siteId:page.siteId,postId:page.wpId,url:page.fullUrl,contentHash:destination.saved.contentHash,sourceBinding:destination.sourceBinding,
    state:'queued',phase:previous?.state==='uncertain'?previous.phase:'prepared',stage:'trashing',errorCode:null};
   if(previous)update(previous,patch);else store.createRecord(page.projectId,kind,patch,key(page.id));
   return view(page,run);
  }
  function guard(record,{allowArchived=false}={}){
   const current=get(record.pageId),page=store.getPage(record.pageId),run=store.getRecord(record.originRunId),destination=target(page,run),project=store.getProject(record.projectId);
-  if(publicationTurn.owner()?.id!==record.id||current?.state!=='running'||!project||(!allowArchived&&project.archived)||!destination||page.revision!==record.pageRevision||page.siteId!==record.siteId||page.wpId!==record.postId||page.fullUrl!==record.url||destination.saved.contentHash!==record.contentHash||!isDeepStrictEqual(destination.sourceBinding,record.sourceBinding)||hasWrite(page))fail('NATIVE_CONTENT_CHANGED');
+  if(publicationTurn.owner()?.id!==record.id||!sameAttempt(current,record)||!project||(!allowArchived&&project.archived)||!destination||page.revision!==record.pageRevision||page.siteId!==record.siteId||page.wpId!==record.postId||page.fullUrl!==record.url||destination.saved.contentHash!==record.contentHash||!isDeepStrictEqual(destination.sourceBinding,record.sourceBinding)||hasWrite(page))fail('NATIVE_CONTENT_CHANGED');
   return {current,page,run,...destination};
  }
  async function close(record){
@@ -117,8 +134,8 @@ export function createPublishedTrash({store,publicationTurn,browser,hasActivePag
     update(record,{state:'completed',phase:'trashed',confirmedAt:new Date(clock()).toISOString()});
    });
   }catch(error){
-   const latest=get(record.pageId),uncertain=latest.phase!=='prepared';
-   update(latest,{state:uncertain?'uncertain':'failed',errorCode:typeof error?.code==='string'?error.code:'NATIVE_TRASH_UNAVAILABLE'});
+   const latest=get(record.pageId);
+   if(sameAttempt(latest,record))update(latest,{state:latest.phase==='prepared'?'failed':'uncertain',errorCode:typeof error?.code==='string'?error.code:'NATIVE_TRASH_UNAVAILABLE'});
   }finally{await close(record);}
  }
  return {get,schedule,view,tick};

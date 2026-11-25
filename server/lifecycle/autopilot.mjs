@@ -140,10 +140,15 @@ function preparedSnapshot(run,store){
 // imported configuration remains intact. Copy/preview the confirmed bytes.
 function readPreparedSnapshot(run,store){
  const snapshot=preparedSnapshot(run,store),page=snapshot.page,raw=page.remoteSnapshot;
- if(run.state!=='completed'||raw?.mode!=='browser')return snapshot;
+ const trashed=page.lifecycleState==='trashed';
+ if(!trashed&&(run.state!=='completed'||raw?.mode!=='browser'))return snapshot;
+ const trash=trashed?store.getRecord('published-trash:'+page.id):null;
+ if(trashed&&(run.state!=='completed'||raw?.mode!=='browser'||trash?.kind!=='published_trash'||trash.state!=='completed'||trash.phase!=='trashed'||
+  trash.projectId!==run.projectId||trash.pageId!==page.id||trash.originRunId!==run.id||trash.siteId!==page.siteId||trash.postId!==page.wpId||trash.url!==run.nativePublication?.url||page.fullUrl))fail('NATIVE_SNAPSHOT_UNAVAILABLE');
  const title=raw.title??page.title,postId=raw.postId??page.wpId,url=raw.url??page.fullUrl;
- const legacy=typeof raw.content==='string'?createHash('sha256').update(JSON.stringify([raw.postType,title,raw.content,raw.status])).digest('hex'):null;
- if(raw.status!=='publish'||raw.postType!=='page'||postId!==page.wpId||title!==page.title||url!==page.fullUrl||typeof raw.content!=='string'||![legacy,bridgeContentHash({...raw,title})].includes(raw.contentHash))fail('NATIVE_SNAPSHOT_UNAVAILABLE');
+ const legacy=typeof raw.content==='string'?createHash('sha256').update(JSON.stringify([raw.postType,title,raw.content,'publish'])).digest('hex'):null;
+ const contentHash=trashed?trash.contentHash:raw.contentHash;
+ if(raw.status!==(trashed?'trash':'publish')||raw.postType!=='page'||postId!==page.wpId||title!==page.title||url!==(trashed?trash.url:page.fullUrl)||typeof raw.content!=='string'||![legacy,bridgeContentHash({...raw,title,status:'publish'})].includes(contentHash))fail('NATIVE_SNAPSHOT_UNAVAILABLE');
  return {...snapshot,reviewToken:null,rendered:{...snapshot.rendered,html:raw.content,title,expectedUrls:page.expectedUrls,expectedMarker:page.expectedMarker||'pp-landing'}};
 }
 function verifyPublicationApproval(run,store,snapshot){
@@ -169,7 +174,6 @@ function canDeleteRun(run,store){
  const page=run.pageId&&store.getPage(run.pageId);
  return !run.pageId||!!page&&!page.wpId&&!page.fullUrl&&!page.siteId&&!store.listJobs(run.projectId).some(job=>job.pageId===page.id);
 }
-function publicRun(run,store){const page=run.pageId&&store.getPage(run.pageId);return {id:run.id,revision:run.revision,publication:publicPublication(run,page),projectId:run.projectId,state:run.state,stage:run.stage,source:run.source||'ai',chromeMode:run.chromeMode||'custom',warnings:run.warnings||[],links:run.links,...(run.editorial?{editorial:run.editorial}:{}),title:page?.title||run.title||'',pageId:run.pageId||null,jobId:run.jobId||null,fullUrl:page?.fullUrl||'',selectedDomain:run.candidate?.baseUrl||run.manualTarget?.baseUrl||'',skippedSites:(run.donorSkips||[]).map(s=>({...publicDonorSkip(s),message:messages[s.code]||s.code})),browserWindow:run.browserWindow===true,browserMode:run.browserMode||'visible',destinationBlockedReason:destinationBlockedReason(run,store),destinationMode:run.manualTarget?'manual':'sheet',destinationRevision:run.destinationRevision||0,donorPinned:run.donorPinned===true,canSetDestination:canSetDestination(run,store),hasHtml:!!run.pageId,reviewBeforePublish:run.reviewBeforePublish===true,canDelete:canDeleteRun(run,store),canApprove:run.reviewBeforePublish===true&&!!page&&run.state==='awaiting_review'&&!run.jobId&&(!run.nativePublication||run.nativePublication.phase==='draft')&&!store.getProject(run.projectId)?.archived,pluginFallback:run.nativePluginFallback?{code:run.nativePluginFallback.code,message:'Clean Links недоступний. Вигляд сторінки перевіряється окремо.'}:null,cleanupPhase:run.nativeCleanup?.phase||null,verification:page?.verification||null,error:publishedCheckError(run.error?{...run.error,message:aiOutputMessage(run.error.issues)||aiDiagnosticMessage(run.error.diagnostics)||messages[run.error.code]||run.error.message}:null,page?.verification),selectionDiagnostics:run.selectionDiagnostics||null,createdAt:run.createdAt,updatedAt:run.updatedAt};}
 export async function createAutopilot({store,dataDir,masterKey,ai={},client,bridge,workflow,visibleBrowser=null,hasActivePage=()=>false,planner=ai.handler?createAIPagePlanner(ai):{generate:async()=>fail('not_configured')},source,sourceSignal,googleAuth=null,googleBrowser=null,bootstrapFactory=createWordPressBootstrap,maxPages=1000,clock=Date.now,manualPublishedReview=false,ampValidatorInit=initializeAmpValidator}={}){
  if(store.listProjects().some(project=>store.getRecord('amp-mode:'+project.id)?.enabled)){try{await ampValidatorInit();}catch{ /* Optional AMP must never prevent ordinary workspace startup. */ }}
  const ampModeChanges=new Set();
@@ -181,6 +185,13 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
  const publicationTurn=createPublicationTurn({store,allRuns,enabled:visibleBrowser?.nativeEditor===true,clock,closeBrowser:id=>visibleBrowser?.reset?.(id),hasActivePage,canCloseBrowser:typeof visibleBrowser?.reset==='function',isActive:id=>activeLeases.has(id),manualPublishedReview});publicationTurn.adoptLegacy();
  const get=id=>{const run=store.getRecord(id);if(!run||run.kind!==KIND||run.deletedAt)fail('NOT_FOUND');return run;};
  const update=(id,patch)=>store.atomic(()=>{const run=get(id),lease=activeLeases.get(id);if(lease&&(run.leaseToken!==lease.token||Date.parse(run.leaseUntil)<=clock()))fail('LEASE_CONFLICT');const manual=visibleBrowser?.nativeEditor&&['BROWSER_CAPTCHA_REQUIRED','BROWSER_LOGIN_REQUIRED'].includes(patch.error?.code),destinationChanged=patch.destinationRevision!==undefined&&patch.destinationRevision!==(run.destinationRevision||0)&&!patch.canonicalLogin;const saved=store.updateRecord(id,{...(destinationChanged?{publicationRecovery:null,publicationEvidence:null,publicationCapabilities:null,capabilityHistoryId:null,capabilityAccountRef:null,publicationCheckedJob:null,nativeDispatchNotStarted:null}:{}),...patch,...(manual?{browserWindow:true}:{})},run.revision);return manual?beginManualWait(saved)||saved:saved;});
+ function canApproveRun(run,page=run?.pageId&&store.getPage(run.pageId)){
+  return !!(run?.reviewBeforePublish&&page&&page.lifecycleState!=='trashed'&&!run.deletedAt&&run.state==='awaiting_review'&&!run.jobId&&
+   (!run.browserPreparing||Date.parse(run.browserPreparingUntil)<=clock())&&(!run.leaseToken||Date.parse(run.leaseUntil)<=clock())&&
+   (!run.nativePublication||run.nativePublication.phase==='draft')&&(!run.slug||visibleBrowser?.nativeEditor===true)&&
+   (!run.requestedDonor||run.candidate||run.manualTarget)&&!store.getProject(run.projectId)?.archived);
+ }
+ function publicRun(run,store){const page=run.pageId&&store.getPage(run.pageId);return {id:run.id,revision:run.revision,publication:publicPublication(run,page,{now:clock(),mayReconcile:mayReconcilePublication(run)}),...parkedResumeStatus(run),projectId:run.projectId,state:run.state,stage:run.stage,source:run.source||'ai',chromeMode:run.chromeMode||'custom',warnings:run.warnings||[],links:run.links,...(run.editorial?{editorial:run.editorial}:{}),title:page?.title||run.title||'',pageId:run.pageId||null,jobId:run.jobId||null,fullUrl:page?.fullUrl||'',selectedDomain:run.candidate?.baseUrl||run.manualTarget?.baseUrl||'',skippedSites:(run.donorSkips||[]).map(s=>({...publicDonorSkip(s),message:messages[s.code]||s.code})),browserWindow:run.browserWindow===true,browserMode:run.browserMode||'visible',destinationBlockedReason:destinationBlockedReason(run,store),destinationMode:run.manualTarget?'manual':'sheet',destinationRevision:run.destinationRevision||0,donorPinned:run.donorPinned===true,canSetDestination:canSetDestination(run,store),hasHtml:!!run.pageId,reviewBeforePublish:run.reviewBeforePublish===true,canDelete:canDeleteRun(run,store),canApprove:canApproveRun(run,page),pluginFallback:run.nativePluginFallback?{code:run.nativePluginFallback.code,message:'Clean Links недоступний. Вигляд сторінки перевіряється окремо.'}:null,cleanupPhase:run.nativeCleanup?.phase||null,verification:page?.verification||null,error:publishedCheckError(run.error?{...run.error,message:aiOutputMessage(run.error.issues)||aiDiagnosticMessage(run.error.diagnostics)||messages[run.error.code]||run.error.message}:null,page?.verification),selectionDiagnostics:run.selectionDiagnostics||null,createdAt:run.createdAt,updatedAt:run.updatedAt};}
  const publicationComplete={state:'completed',stage:'completed',error:null,checkJobId:null,candidateCredential:null};
  async function closeCompletedPublication(run){
   if(manualPublishedReview){
@@ -287,6 +298,7 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
    if(run.slug&&visibleBrowser?.nativeEditor!==true)fail('NATIVE_SLUG_MISMATCH');
    if(run.requestedDonor&&!run.candidate&&!run.manualTarget)fail('IMPORT_DONOR_UNAVAILABLE');
    const snapshot=preparedSnapshot(run,store);
+   if(snapshot.page.lifecycleState==='trashed')fail('CONFLICT');
    if(run.publicationApproval?.reviewToken===body.reviewToken){verifyPublicationApproval(run,store,snapshot);return publicRun(run,store);}
    if(run.browserPreparing&&!(Date.parse(run.browserPreparingUntil)<=clock()))fail('CONFLICT');
    if(body.reviewToken!==snapshot.reviewToken)fail('REVIEW_REQUIRED');
@@ -508,7 +520,25 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
   })();selectionTask=task;task.finally(()=>{if(selectionTask===task)selectionTask=null;}).catch(()=>{});return task;
  }
  function reviewToken(id){const run=get(id);return preparedSnapshot(run,store).reviewToken;}
- function retrySelection(id){const run=get(id);if(!run.queueItemId||!run.reviewBeforePublish||run.publicationApproval||run.stage!=='selecting'||run.candidate||!run.pageId||!['failed','needs_attention','waiting_source','paused'].includes(run.state))return null;if(store.getProject(run.projectId)?.archived||run.leaseToken&&Date.parse(run.leaseUntil)>clock())fail('CONFLICT');selectionCache=null;return publicRun(update(id,{state:'awaiting_review',error:null}),store);}
+ function retrySelectionEligible(run){return !!(run.queueItemId&&run.reviewBeforePublish&&!run.publicationApproval&&run.stage==='selecting'&&!run.candidate&&run.pageId&&['failed','needs_attention','waiting_source','paused'].includes(run.state));}
+ function retryRunBusy(run){return activeLeases.has(run.id)||run.leaseToken&&Date.parse(run.leaseUntil)>clock()||run.browserPreparing&&!(Date.parse(run.browserPreparingUntil)<=clock());}
+ function retrySelection(id){const run=get(id);if(!retrySelectionEligible(run))return null;if(store.getProject(run.projectId)?.archived||retryRunBusy(run))fail('CONFLICT');selectionCache=null;return publicRun(update(id,{state:'awaiting_review',error:null}),store);}
+ function canRetryRun(run,page){
+  if(!run||run.deletedAt||!['failed','needs_attention','waiting_source','uncertain','paused'].includes(run.state)||retryRunBusy(run)||page?.lifecycleState==='trashed')return false;
+  if(retrySelectionEligible(run))return !!page;
+  if(run.reviewBeforePublish&&run.pageId){
+   const approval=run.publicationApproval;
+   if(!page||approval?.pageId!==page.id||!run.jobId&&(run.nativePublishedRevision??approval.pageRevision)!==page.revision)return false;
+  }
+  if(run.stage==='generating'){
+   const receipt=ai.budget?.getRequest?.(run.requestId);
+   if(receipt?.state!=='completed'&&!(receipt?.state==='rejected'&&receipt.retryable)&&(run.state==='uncertain'||receipt))return false;
+  }
+  if(visibleBrowser?.nativeEditor!==true)return !(run.stage==='installing'&&run.state==='uncertain'&&!run.apiCredential);
+  const owner=publicationTurn.owner();
+  const needsVisibleLogin=run.browserMode==='hidden'&&['BROWSER_CAPTCHA_REQUIRED','BROWSER_LOGIN_REQUIRED'].includes(run.error?.code);
+  return !nativeResumeBlock(run)&&!(needsVisibleLogin&&owner&&owner.id!==run.id);
+ }
  async function checkSource(body,{signal}={}){
   fields(body,['projectId']);if(!sourceConfigured())fail('SOURCE_NOT_CONFIGURED');let criteria=normalizeSiteCriteria();
   if(body.projectId!==undefined){if(typeof body.projectId!=='string')fail('VALIDATION');const project=store.getProject(body.projectId);if(!project||project.archived)fail('NOT_FOUND');criteria=project.siteSelection;}
@@ -521,7 +551,7 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
   const engine=donorExclusions?.snapshot(),identity=policySource(result.sourceIdentity),contexts=[...groups.values()].flatMap(group=>group.contexts),diagnostics=policyDiagnostics(pool,undefined,{criteria,inputDiagnostics,engine,sourceIdentity:identity,contexts:contexts.length?contexts:[undefined]}),allowed=result.candidates.filter(candidate=>(contexts.length?contexts:[undefined]).some(run=>candidatePolicy(candidate,run,{engine,sourceIdentity:identity}).candidate));
   return {candidateCount:allowed.length,issueCount:result.issueCount??result.issues.length,diagnostics,groups:[...groups.values()].map(({contexts,...group})=>({...group,...policyDiagnostics(pool,undefined,{criteria:group.criteria,inputDiagnostics,engine,sourceIdentity:identity,contexts})})),sample:allowed.slice(0,5).map(c=>({domain:new URL(c.baseUrl).hostname,dr:c.metrics?.dr??null,traffic:c.metrics?.traffic??null,geo:c.metrics?.geo||[]}))};
  }
- async function resume(id){let replacementRequestId;let r=get(id);if(store.getProject(r.projectId)?.archived)fail('CONFLICT');if(r.leaseToken&&Date.parse(r.leaseUntil)>clock()||r.browserPreparing&&!(Date.parse(r.browserPreparingUntil)<=clock()))fail('CONFLICT');if(r.reviewBeforePublish&&r.pageId){try{verifyPublicationApproval(r,store);}catch(error){if(error.code==='REVIEW_REQUIRED'&&!r.jobId)update(id,{state:r.nativePublication&&r.nativePublication.phase!=='draft'?'uncertain':'awaiting_review',error:safeError(error)});throw error;}}if(!['failed','needs_attention','waiting_source','uncertain','paused'].includes(r.state))fail('CONFLICT');if(r.stage==='generating'){const receipt=ai.budget?.getRequest?.(r.requestId);if(receipt?.state==='completed'){}else if(receipt?.state==='rejected'&&receipt.retryable){if(receipt.model&&receipt.model!==(ai.env?.OPENAI_MODEL||'gpt-5.4-mini'))replacementRequestId=randomUUID()+'-page';else ai.budget.authorizeRetry(r.requestId);}else if(r.state==='uncertain'||receipt&&receipt.state!=='completed')fail('AI_RESULT_UNCERTAIN');}
+ async function resume(id){let replacementRequestId;let r=get(id);if(store.getProject(r.projectId)?.archived||r.pageId&&store.getPage(r.pageId)?.lifecycleState==='trashed')fail('CONFLICT');if(r.leaseToken&&Date.parse(r.leaseUntil)>clock()||r.browserPreparing&&!(Date.parse(r.browserPreparingUntil)<=clock()))fail('CONFLICT');if(r.reviewBeforePublish&&r.pageId){try{verifyPublicationApproval(r,store);}catch(error){if(error.code==='REVIEW_REQUIRED'&&!r.jobId)update(id,{state:r.nativePublication&&r.nativePublication.phase!=='draft'?'uncertain':'awaiting_review',error:safeError(error)});throw error;}}if(!['failed','needs_attention','waiting_source','uncertain','paused'].includes(r.state))fail('CONFLICT');if(r.stage==='generating'){const receipt=ai.budget?.getRequest?.(r.requestId);if(receipt?.state==='completed'){}else if(receipt?.state==='rejected'&&receipt.retryable){if(receipt.model&&receipt.model!==(ai.env?.OPENAI_MODEL||'gpt-5.4-mini'))replacementRequestId=randomUUID()+'-page';else ai.budget.authorizeRetry(r.requestId);}else if(r.state==='uncertain'||receipt&&receipt.state!=='completed')fail('AI_RESULT_UNCERTAIN');}
  if(visibleBrowser?.nativeEditor===true){if(replacementRequestId)update(id,{requestId:replacementRequestId});return resumeNative(get(id));}
  if(r.stage==='installing'&&r.state==='uncertain'&&!r.apiCredential)fail(r.error?.code||'CONFLICT');if(r.siteId){const site=store.getSite(r.siteId),credentials=store.getSiteCredentials(r.siteId);const checked=await client.checkSite({baseUrl:site.baseUrl,...credentials});if(checked.state!=='ok'||!checked.apiRoot)fail('SITE_NOT_READY');const integrity=await bridge.checkStatus({site:{baseUrl:site.baseUrl,...credentials},apiRoot:checked.apiRoot});if(!integrity.ready||!integrity.integrityVerified)fail('SITE_NOT_READY');if(!site.enabled)store.updateSite(site.id,{enabled:true},site.revision);}
  if(r.jobId){let job=store.getJob(r.jobId);if(job?.state==='failed')job=store.reconsiderFailedWrite(job.id,job.revision);if(job?.state==='uncertain'){if(!workflow)fail('CONFLICT');await workflow.handle(new Request('http://localhost/api/lifecycle/jobs/'+job.id+'/retry',{method:'POST'}),'/jobs/'+job.id+'/retry',async()=>({}));job=store.getJob(job.id);if(!['queued','completed'].includes(job.state))fail('CONFLICT');}if(job?.state==='paused')store.resumeJob(job.id);}
@@ -529,18 +559,38 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
  r=get(id);
  if(r.stage==='checking'&&r.pageId){const page=store.getPage(r.pageId);const job=store.enqueueJob({projectId:r.projectId,pageId:page.id,siteId:page.siteId,type:'page_check',payload:{},idempotencyKey:'autopilot-check:'+randomUUID()});update(id,{checkJobId:job.id});}return publicRun(update(id,{...(replacementRequestId?{requestId:replacementRequestId}:{}),state:r.stage==='checking'?'checking':r.stage==='publishing'?'publishing':'queued',error:null}),store);}
  function beforePublish(page){if(store.listRecords(page.projectId,KIND).some(run=>run.pageId===page.id))fail('REVIEW_REQUIRED');}
+ function nativeResumeBlock(run){
+  if(run.jobId||store.listJobs(run.projectId).some(job=>job.pageId===run.pageId&&job.effect==='write')||run.stage==='publishing'&&run.publicationMode!=='native')return 'NATIVE_LEGACY_PUBLICATION';
+  if(publicationTurn.isParking(run.id)||run.browserPreparing&&!(Date.parse(run.browserPreparingUntil)<=clock()))return 'CONFLICT';
+  if(!run.publicationParked)return null;
+  if(store.getRecord('queue-control:'+run.projectId)?.paused)return 'PROJECT_PAUSED';
+  if(run.nativePublication?.phase==='creating'&&(!Number.isSafeInteger(run.nativePublication.postId)||run.nativePublication.postId<1))return 'NATIVE_RESULT_UNCERTAIN';
+  const owner=publicationTurn.owner();
+  return owner&&owner.id!==run.id?'BROWSER_BUSY':null;
+ }
+ function parkedResumeStatus(run){
+  if(!run?.publicationParked)return null;
+  const project=store.getProject(run.projectId);
+  const blocked=!project||project.archived||project.trashed||run.deletedAt||visibleBrowser?.nativeEditor!==true||
+   !['failed','needs_attention','waiting_source','uncertain','paused'].includes(run.state)||activeLeases.has(run.id)||
+   run.leaseToken&&Date.parse(run.leaseUntil)>clock()?'CONFLICT':nativeResumeBlock(run);
+  const reasons={PROJECT_PAUSED:'Проєкт на паузі. Спочатку продовжте проєкт.',NATIVE_RESULT_UNCERTAIN:'WordPress не підтвердив ідентифікатор сторінки. Повторення створення може призвести до дубліката.',BROWSER_BUSY:'Спочатку завершіть поточну сторінку в черзі.'};
+  return {publicationParked:true,canResumeParked:!blocked,...(blocked?{parkedResumeBlockedReason:reasons[blocked]||messages[blocked]}:{})};
+ }
+ function mayReconcilePublication(run){
+  if(!run||visibleBrowser?.nativeEditor!==true||run.publicationMode!=='native'||run.jobId||
+   run.deletedAt||run.browserPreparing||retryRunBusy(run)||manualPublishedReview&&run.stage==='completed')return false;
+  const project=store.getProject(run.projectId),owner=publicationTurn.owner();
+  if(!project||project.archived||project.trashed||store.getRecord('queue-control:'+run.projectId)?.paused||owner&&owner.id!==run.id||run.pageId&&hasActivePage(run.pageId))return false;
+  if(run.nativePublication?.phase==='published'&&run.stage==='checking'&&!run.nativeCleanup)return !run.publicationParked&&canRecheckPublished(run,run.pageId&&store.getPage(run.pageId));
+  return true;
+ }
  async function resumeNative(run){
-  if(run.browserPreparing&&!(Date.parse(run.browserPreparingUntil)<=clock()))fail('CONFLICT');
   // An old remote job has its own identity and may already have dispatched.
   // Never turn it into a fresh native-editor publication.
-  if(run.jobId||store.listJobs(run.projectId).some(job=>job.pageId===run.pageId&&job.effect==='write'))fail('NATIVE_LEGACY_PUBLICATION');
-  if(run.stage==='publishing'&&run.publicationMode!=='native')fail('NATIVE_LEGACY_PUBLICATION');
-  if(publicationTurn.isParking(run.id))fail('CONFLICT');
+  const blocked=nativeResumeBlock(run);if(blocked)fail(blocked==='PROJECT_PAUSED'?'CONFLICT':blocked);
   if(run.publicationParked){
-   if(store.getRecord('queue-control:'+run.projectId)?.paused)fail('CONFLICT');
-   if(run.nativePublication?.phase==='creating'&&!run.nativePublication.postId)fail('NATIVE_RESULT_UNCERTAIN');
    if(!publicationTurn.claim(run))fail('BROWSER_BUSY');
-   update(run.id,{publicationParked:false});
   }
   const showBrowser=run.browserMode==='hidden'&&['BROWSER_CAPTCHA_REQUIRED','BROWSER_LOGIN_REQUIRED'].includes(run.error?.code);
   if(showBrowser){
@@ -630,7 +680,7 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
    if(login&&site?.bootstrap?.mode==='browser'){const existing=store.getBrowserCredentials(site.id);if(existing?.username!==login.username||existing?.applicationPassword!==login.applicationPassword)store.updateSite(site.id,{username:login.username,applicationPassword:login.applicationPassword},site.revision);}
    const published=page.wpId===result.postId&&page.fullUrl===url.href?page:store.updatePage(page.id,{siteId:run.siteId,wpId:result.postId,wpType:'page',fullUrl:url.href,lifecycleState:'published',remoteSnapshot:{mode:'browser',postId:result.postId,postType:'page',title:page.title,url:url.href,config:page.config,status:'publish',content:rendered.html,contentHash:createHash('sha256').update(JSON.stringify(['page',page.title,rendered.html,'publish'])).digest('hex')}},page.revision);
    const check=manualPublishedReview?null:store.enqueueJob({projectId:run.projectId,pageId:page.id,siteId:run.siteId,type:'page_check',payload:{},idempotencyKey:'native-verify:'+run.id+':'+(run.publicationAttempt||0)+':'+(run.destinationRevision||0)});
-   update(run.id,{nativePublication:{postId:result.postId,phase:'published',url:url.href},nativePublishedRevision:published.revision,publicationEvidence:{observation:'published',at:new Date(clock()).toISOString()},publicationCapabilities:{...current.publicationCapabilities,editor:'available',markup:true},...(check?{candidateCredential:current.nativePluginFallback?current.candidateCredential:null,state:'checking',stage:'checking',error:null,checkJobId:check.id}:publicationComplete)});
+   update(run.id,{nativePublication:{postId:result.postId,phase:'published',url:url.href},nativePublishedRevision:published.revision,publicationEvidence:{observation:'published',at:new Date(clock()).toISOString()},publicationCapabilities:{...current.publicationCapabilities,editor:'available',markup:true},...(current.publicationParked?{publicationParked:false}:{}),...(check?{candidateCredential:current.nativePluginFallback?current.candidateCredential:null,state:'checking',stage:'checking',error:null,checkJobId:check.id}:publicationComplete)});
   });return url;
  }
  function recordNativeCheck(run,check,code){
@@ -971,13 +1021,14 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
   fields(body,['expectedRevision']);if(!Number.isSafeInteger(body.expectedRevision)||body.expectedRevision<0)fail('VALIDATION');
   let run=get(id);if(run.revision!==body.expectedRevision||activeLeases.has(id)||run.leaseToken&&Date.parse(run.leaseUntil)>clock()||run.browserPreparing)fail('CONFLICT');
   if(visibleBrowser?.nativeEditor!==true||run.publicationMode!=='native'||run.jobId)fail('CONFLICT');
-  if(manualPublishedReview&&run.stage==='completed')fail('CONFLICT');
+  if(!mayReconcilePublication(run)||run.pageId&&store.getPage(run.pageId)?.lifecycleState==='trashed')fail('CONFLICT');
+  if(run.publicationParked&&(!Number.isSafeInteger(run.nativePublication?.postId)||run.nativePublication.postId<1))fail('CONFLICT');
   if(run.nativePublication?.phase==='published'&&run.stage==='checking'&&!run.nativeCleanup){
    const current=recheckPublished(id,body.expectedRevision);
    return {run:current,publication:current.publication,observation:'published'};
   }
-  if(!publicationTurn.claim(run))fail('CONFLICT');
-  const token=randomUUID();store.atomic(()=>{const current=get(id);if(current.revision!==body.expectedRevision||current.leaseToken&&Date.parse(current.leaseUntil)>clock())fail('CONFLICT');store.updateRecord(id,{leaseToken:token,leaseOwner:workerId,leaseUntil:new Date(clock()+180000).toISOString()},current.revision);activeLeases.set(id,{id,token});});
+  const token=randomUUID();store.atomic(()=>{const current=get(id);if(current.revision!==body.expectedRevision||!mayReconcilePublication(current)||!publicationTurn.claim(current))fail('CONFLICT');store.updateRecord(id,{leaseToken:token,leaseOwner:workerId,leaseUntil:new Date(clock()+180000).toISOString()},current.revision);});
+  activeLeases.set(id,{id,token});
   let observation='unknown';
   try{
    const snapshot=nativeGuard(id,undefined,false,{requireBrowser:false});run=get(id);
@@ -994,9 +1045,12 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
      catch(error){if(error.code==='NATIVE_NOT_PUBLISHED')observation='draft';else throw error;}
     }
    }
-   update(id,{publicationEvidence:{observation,postId:run.nativePublication?.postId||null,destinationRevision:run.destinationRevision||0,at:new Date(clock()).toISOString()},...(observation==='draft'?{state:'uncertain',error:safeError({code:'NATIVE_NOT_PUBLISHED',stage:'publishing'})}:observation==='trashed'?{error:null}:{})});
+   update(id,{publicationEvidence:{observation,postId:run.nativePublication?.postId||null,destinationRevision:run.destinationRevision||0,at:new Date(clock()).toISOString()},...(observation==='draft'?{state:'uncertain',error:safeError({code:'NATIVE_NOT_PUBLISHED',stage:'publishing'})}:observation==='trashed'?{error:null,...(run.publicationParked?{publicationParked:false,state:'checking'}:{})}:{})});
   }catch(error){if(['CONFLICT','LEASE_CONFLICT','REVIEW_REQUIRED','PROJECT_PAUSED'].includes(error.code))throw error;nativeGuard(id,undefined,false,{requireBrowser:false});update(id,{publicationEvidence:{observation:'unknown',at:new Date(clock()).toISOString()},error:safeError(error),state:['BROWSER_CAPTCHA_REQUIRED','BROWSER_LOGIN_REQUIRED'].includes(error.code)?'needs_attention':'uncertain'});}
-  finally{activeLeases.delete(id);store.atomic(()=>{const current=get(id);if(current.leaseToken===token)store.updateRecord(id,{leaseToken:null,leaseOwner:null,leaseUntil:null},current.revision);});}
+  finally{
+   try{if(run.publicationParked)await publicationTurn.releaseParkedReconciliation(id,token);}catch{/* Keep the durable turn until the private window closes. */}
+   activeLeases.delete(id);store.atomic(()=>{const current=get(id);if(current.leaseToken===token)store.updateRecord(id,{leaseToken:null,leaseOwner:null,leaseUntil:null},current.revision);});
+  }
   const current=publicRun(get(id),store);return {run:current,publication:current.publication,observation};
  }
  function preparedExport(id,variant='prepared',includeOriginal=true){
@@ -1098,10 +1152,10 @@ export async function createAutopilot({store,dataDir,masterKey,ai={},client,brid
   const browserFocus=route.match(/^\/autopilot\/([a-zA-Z0-9-]+)\/browser$/);if(browserFocus&&request.method==='POST'){fields(await read(request),[]);const run=get(browserFocus[1]);if(!visibleBrowser||!run.browserWindow||run.browserMode==='hidden')fail('BROWSER_NOT_OPEN');await visibleBrowser.focus(run.id);return json({opened:true});}
   const deletion=route.match(/^\/autopilot\/([a-zA-Z0-9-]+)\/delete$/);if(deletion&&request.method==='POST'){fields(await read(request),[]);try{return json(await removeWithBrowser(deletion[1]));}catch(error){if(error.code==='CONFLICT')return json({code:'DELETE_UNAVAILABLE',error:'Запуск уже виконується або пов’язаний із публікацією. Оновіть список і дочекайтеся завершення роботи.'},409);throw error;}}
   const launchRoute=route.match(/^\/projects\/([a-zA-Z0-9-]+)\/autopilot$/);if(launchRoute){if(!store.getProject(launchRoute[1]))fail('NOT_FOUND');if(request.method==='GET')return json({runs:store.listRecords(launchRoute[1],KIND).filter(r=>!r.deletedAt).map(r=>publicRun(r,store))});if(request.method==='POST')return json({run:launch(launchRoute[1],await read(request))},202);}
-  const action=route.match(/^\/autopilot\/([a-zA-Z0-9-]+)\/(resume|approve|preview|html)$/);if(action){const run=get(action[1]);if(action[2]==='approve'&&request.method==='POST'){const body=await read(request),alreadyApproved=!!get(run.id).publicationApproval;let approved=approve(run.id,body);if(!alreadyApproved&&visibleBrowser?.prepare&&(!visibleBrowser.nativeEditor||run.candidate||run.manualTarget)&&!store.getRecord('queue-control:'+run.projectId)?.paused&&publicationTurn.claim(get(run.id))){update(run.id,{browserPreparing:true,browserPreparingUntil:new Date(clock()+180000).toISOString()});try{await visibleBrowser.prepare(run.id,{headless:approved.browserMode==='hidden',...(visibleBrowser.nativeEditor?{baseUrl:run.candidate?.baseUrl||run.manualTarget?.baseUrl}:{})});approved=publicRun(update(run.id,{browserWindow:true,browserPreparing:false,browserPreparingUntil:null}),store);}catch(error){approved=publicRun(update(run.id,{browserPreparing:false,browserPreparingUntil:null,state:'needs_attention',error:safeError(error)}),store);}}return json({run:approved},202);}if(action[2]==='resume'&&request.method==='POST'){fields(await read(request),[]);return json({run:await resume(run.id)},202);}if(request.method==='GET'&&['preview','html'].includes(action[2])){if(!run.pageId)fail('NOT_FOUND');const snapshot=readPreparedSnapshot(run,store),rendered=snapshot.rendered;if(action[2]==='html')return json({html:rendered.html,...(run.reviewBeforePublish?{reviewToken:snapshot.reviewToken}:{})});return new Response('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>'+rendered.html+previewNavigation+'</body></html>',{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"sandbox allow-scripts; default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src https: data:; script-src 'unsafe-inline'"}});}}
+  const action=route.match(/^\/autopilot\/([a-zA-Z0-9-]+)\/(resume|approve|preview|html)$/);if(action){const run=get(action[1]);if(action[2]==='approve'&&request.method==='POST'){const body=await read(request),alreadyApproved=!!get(run.id).publicationApproval;let approved=approve(run.id,body);if(!alreadyApproved&&visibleBrowser?.prepare&&(!visibleBrowser.nativeEditor||run.candidate||run.manualTarget)&&!store.getRecord('queue-control:'+run.projectId)?.paused&&publicationTurn.claim(get(run.id))){update(run.id,{browserPreparing:true,browserPreparingUntil:new Date(clock()+180000).toISOString()});try{await visibleBrowser.prepare(run.id,{headless:approved.browserMode==='hidden',...(visibleBrowser.nativeEditor?{baseUrl:run.candidate?.baseUrl||run.manualTarget?.baseUrl}:{})});approved=publicRun(update(run.id,{browserWindow:true,browserPreparing:false,browserPreparingUntil:null}),store);}catch(error){approved=publicRun(update(run.id,{browserPreparing:false,browserPreparingUntil:null,state:'needs_attention',error:safeError(error)}),store);}}return json({run:approved},202);}if(action[2]==='resume'&&request.method==='POST'){fields(await read(request),[]);return json({run:await resume(run.id)},202);}if(request.method==='GET'&&['preview','html'].includes(action[2])){if(!run.pageId)fail('NOT_FOUND');const snapshot=readPreparedSnapshot(run,store),rendered=snapshot.rendered;if(action[2]==='html')return json({html:rendered.html,...(run.reviewBeforePublish&&snapshot.reviewToken?{reviewToken:snapshot.reviewToken}:{})});return new Response('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>'+rendered.html+previewNavigation+'</body></html>',{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"sandbox allow-scripts; default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src https: data:; script-src 'unsafe-inline'"}});}}
   return null;
  }
  function beforeRemoteWrite(job){const owner=store.listRecords(job.projectId,KIND).find(r=>r.pageId===job.pageId),run=owner?.jobId===job.id?owner:null;try{if(owner&&visibleBrowser?.nativeEditor===true)fail('NATIVE_LEGACY_PUBLICATION');if(owner&&!run&&(job.type==='publish'||owner.destinationHistory?.some(target=>target.jobId===job.id)))fail('CONFLICT');if(run?.browserWindow){if(!visibleBrowser)fail('BROWSER_UNAVAILABLE');visibleBrowser.assertOpen(run.id);}}catch(error){error.writeNotAttempted=job.attempt===1;throw error;}}
  function browserSubmit(job){const run=store.listRecords(job.projectId,KIND).find(r=>r.jobId===job.id);return run?.browserWindow&&visibleBrowser?.publish?input=>visibleBrowser.publish(run.id,input):null;}
- return {handle,tick,launch,approve,resume,crawlBlocked,canContinueCrawlBlocked,continueCrawlBlocked,canRecheckPublished,saveSource,selectPending,reviewToken,retrySelection,invalidateSelection,destinationStatus,beforePublish,beforeRemoteWrite,browserSubmit,publicationTurn,publicationStatus:publicationTurn.status,status:sourceStatus,googleAccount:()=>['user','browser'].includes(sourceConfig?.authMode)?null:sourceConfig?.serviceAccount||null,googleAccessToken,preparedExport,previewHtml:input=>customerPreview({source:'html',...input}),list:projectId=>store.listRecords(projectId,KIND).filter(r=>!r.deletedAt).map(r=>publicRun(r,store))};
+ return {handle,tick,launch,approve,canApproveRun,resume,parkedResumeStatus,mayReconcilePublication,crawlBlocked,canContinueCrawlBlocked,continueCrawlBlocked,canRecheckPublished,saveSource,selectPending,reviewToken,retrySelection,canRetryRun,invalidateSelection,destinationStatus,beforePublish,beforeRemoteWrite,browserSubmit,publicationTurn,publicationStatus:publicationTurn.status,status:sourceStatus,googleAccount:()=>['user','browser'].includes(sourceConfig?.authMode)?null:sourceConfig?.serviceAccount||null,googleAccessToken,preparedExport,previewHtml:input=>customerPreview({source:'html',...input}),list:projectId=>store.listRecords(projectId,KIND).filter(r=>!r.deletedAt).map(r=>publicRun(r,store))};
 }

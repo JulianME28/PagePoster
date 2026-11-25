@@ -14,8 +14,9 @@ from pypdf import PdfReader
 
 ROOT=Path(__file__).resolve().parents[2]
 SOURCE=ROOT/'docs/USER-GUIDE.uk.md'
-OUT=ROOT.parent/'deliverables/PagePoster-User-Guide-1.1-UA.pdf'
-QA=ROOT/'.desktop-build/guide-ua'
+VERSION='1.1.1'
+OUT=ROOT.parent/f'deliverables/PagePoster-User-Guide-{VERSION}-UA.pdf'
+QA=ROOT/f'.desktop-build/guide-ua/v{VERSION}'
 QA.mkdir(parents=True,exist_ok=True)
 for name,file in [('Segoe','segoeui.ttf'),('Segoe-Bold','segoeuib.ttf'),('Mono','consola.ttf')]:
  pdfmetrics.registerFont(TTFont(name,str(Path('C:/Windows/Fonts')/file)))
@@ -83,7 +84,7 @@ for part in re.split(r'^## ',text,flags=re.M)[1:]:
  sections.append((number,title,blocks(body)))
 assert len(sections)==21
 c=canvas.Canvas(str(OUT),pagesize=A4,pageCompression=1)
-c.setTitle('PagePoster Desktop — гайд користувача українською')
+c.setTitle(f'PagePoster Desktop {VERSION} — гайд користувача українською')
 c.setAuthor('PagePoster');c.setSubject('Налаштування, імпорт, публікація та ручна перевірка сторінок')
 c._doc.Catalog.Lang=PDFString('uk-UA')
 report=[];page_number=0;chapter_pages={}
@@ -93,7 +94,7 @@ def start_page(number,title,size,figure=False):
  page_number+=1;c.setPageSize(size);w,h=size
  c.setFillColor(BLUE);c.rect(0,h-8,w,8,fill=1,stroke=0)
  c.setFont('Segoe-Bold',8.5);c.drawString(M,h-30,'PAGEPOSTER  /  ГАЙД КОРИСТУВАЧА')
- c.setFont('Segoe',8);c.setFillColor(colors.HexColor('#65788e'));c.drawRightString(w-M,h-30,'Український інтерфейс · 1.1')
+ c.setFont('Segoe',8);c.setFillColor(colors.HexColor('#65788e'));c.drawRightString(w-M,h-30,f'Український інтерфейс · {VERSION}')
  c.setStrokeColor(colors.HexColor('#d5dfec'));c.line(M,29,w-M,29)
  c.setFont('Segoe',8);c.drawString(M,17,'Навчальні приклади · 25.11.2026');c.drawRightString(w-M,17,str(page_number))
  header=Paragraph(('Ілюстрація · ' if figure else '')+rich(title),styles['title'])
@@ -147,7 +148,7 @@ for number,title,items in sections:
 c.save()
 reader=PdfReader(str(OUT));assert len(reader.pages)==page_number
 all_text='\n'.join(p.extract_text() or '' for p in reader.pages)
-for phrase in ('Схвалити','Звірити кошик','Імпортувати реєстрацію','Кількість карток','Продовжити відкладену сторінку'):
+for phrase in ('OpenAI API-ключ','Створити проєкт','Схвалити','Звірити кошик','Імпортувати реєстрацію','Кількість карток','Продовжити відкладену сторінку','Повторити додавання до черги'):
  assert phrase in ' '.join(all_text.split()),phrase
 assert not re.search(r'[ыэъёЫЭЪЁ]',all_text),'Russian text found'
 assert not any(p.get('/Annots') for p in reader.pages),'Unexpected hyperlink annotations'

@@ -76,7 +76,7 @@
  function render(){
   user.hidden=mode.value!=='user';service.hidden=mode.value!=='service';const input=service.querySelector('[name="serviceAccount"]');if(input)input.disabled=mode.value!=='service';
   renderSetup(visible()&&known&&!account.clientConfigured);
-  if(signInHelp)signInHelp.hidden=!account.clientConfigured;
+  if(signInHelp)signInHelp.hidden=!known||!account.clientConfigured||account.connected||account.phase==='waiting';
   mode.disabled=busy;connect.disabled=busy||!known||!account.clientConfigured||account.phase==='waiting';connect.textContent=account.connected?'Вибрати інший акаунт':'Увійти через Google';cancel.hidden=account.phase!=='waiting';cancel.disabled=busy;disconnect.hidden=!account.connected;disconnect.disabled=busy;
   status.textContent=!known?'Перевіряємо підключення…':!account.clientConfigured?errors.GOOGLE_CLIENT_REQUIRED:account.phase==='waiting'?'Завершіть вхід у Chrome. PagePoster отримає підключення автоматично.':account.connected?'Підключений акаунт: '+(account.email||'Google'):'Натисніть «Увійти через Google» і виберіть акаунт, якому доступна таблиця.';
  }

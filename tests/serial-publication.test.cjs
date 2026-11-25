@@ -1,10 +1,24 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto');
 async function fixture(t,{initialChallenge=false,manualReview=false}={}){
  const {createLifecycleService}=await import('../server/lifecycle/service.mjs');const dir=fs.mkdtempSync(path.join(os.tmpdir(),'pp-serial-publication-'));let service,blocked=true,visualProblem=false,finishThrows=false,resetHook=null;const opened=[],openModes=[],prepared=[],resumed=[],resets=[],written=[],publicVisits=[];
- const session=id=>({status:async()=>{},login:async()=>{if(blocked)throw Object.assign(Error('manual challenge'),{code:'BROWSER_CAPTCHA_REQUIRED',state:'needs_attention'});},ensureCleanLinks:async()=>{},publishPage:async input=>{await input.checkpoint({postId:80+written.length,phase:'draft'});input.beforeSend();written.push(id);const postId=79+written.length;await input.checkpoint({postId,phase:'published',url:'https://'+id+'.example/published/'});return {postId,url:'https://'+id+'.example/published/',title:input.title,content:input.html,status:'publish'};}});
+ let interruptPublication=false,publicationProof='unknown';
+ const session=id=>({status:async()=>{},login:async()=>{if(blocked)throw Object.assign(Error('manual challenge'),{code:'BROWSER_CAPTCHA_REQUIRED',state:'needs_attention'});},ensureCleanLinks:async()=>{},publishPage:async input=>{
+  const postId=80+written.length,url='https://'+id+'.example/published/';
+  await input.checkpoint({postId,phase:'draft'});
+  if(interruptPublication){
+   interruptPublication=false;await input.checkpoint({postId,phase:'dispatching'});input.beforeSend();written.push(id);
+   throw Object.assign(Error('Publish response lost'),{code:'BROWSER_PUBLICATION_UNCERTAIN',uncertain:true});
+  }
+  input.beforeSend();written.push(id);await input.checkpoint({postId,phase:'published',url});
+  return {postId,url,title:input.title,content:input.html,status:'publish'};
+ }});
  const trashed=[];let stopBeforeTrash=false,canProvePublished=false;let lostTrashReply=false,trashProofAvailable=true,trashHook=null;
  const browser={nativeEditor:true,prepare:async id=>{prepared.push(id);if(initialChallenge)throw Object.assign(Error('Initial challenge'),{code:'BROWSER_CAPTCHA_REQUIRED',state:'needs_attention'});},open:async (id,_url,{headless}={})=>{opened.push(id);openModes.push({id,headless});return {...session(id),
   trashPublished:async({saved,checkpoint,beforeSend})=>{await trashHook?.();await checkpoint({postId:saved.postId,phase:'dispatching'});beforeSend();if(stopBeforeTrash){stopBeforeTrash=false;throw Error("Stopped before applying Trash");}trashed.push(saved.postId);if(lostTrashReply)throw Object.assign(Error('Lost response'),{code:'NATIVE_TRASH_UNCERTAIN',uncertain:true});await checkpoint({postId:saved.postId,phase:'trashed'});return {postId:saved.postId,status:'trash'};},
+  inspectPublished:async({saved,title,html})=>{
+   if(publicationProof!=='published')throw Object.assign(Error('Exact publication proof unavailable'),{code:publicationProof==='draft'?'NATIVE_NOT_PUBLISHED':'NATIVE_CONTENT_CHANGED'});
+   return {postId:saved.postId,url:'https://'+id+'.example/published/',title,content:html,status:'publish'};
+  },
   inspectOwnedPublished:async({saved})=>({postId:saved.postId,status:canProvePublished&&!trashed.includes(saved.postId)?"publish":"unknown",url:saved.url}),
   inspectOwnedTrash:async({saved})=>({postId:saved.postId,status:trashProofAvailable&&trashed.includes(saved.postId)?'trash':'unknown'})
  };},resume:async id=>{resumed.push(id);return true;},assertOpen:()=>{},reset:async id=>{resets.push(id);await resetHook?.(id);},result:async id=>{publicVisits.push(id);},error:async()=>{},done:async()=>{if(finishThrows)throw Error('Window closed after successful verification.');},close:async()=>{}};
@@ -14,7 +28,7 @@ async function fixture(t,{initialChallenge=false,manualReview=false}={}){
  const q=async(route,body)=>{const r=await service.handle(new Request('http://localhost/api/lifecycle'+route,{method:body===undefined?'GET':'POST',headers:{Origin:'http://localhost','Content-Type':'application/json','X-PagePoster-Request':'1'},...(body===undefined?{}:{body:JSON.stringify(body)})}));return {status:r.status,...await r.json()};};
  const add=async name=>{const project=service.store.createProject({name}),input={source:'html',html:'<h1>'+name+'</h1><p>Exact fixture content.</p>',reviewBeforePublish:true},preview=await q('/autopilot/preview',{source:'html',html:input.html}),id=crypto.randomUUID(),launched=await q('/projects/'+project.id+'/autopilot',{...input,idempotencyKey:id,reviewToken:preview.reviewToken});assert.equal(launched.status,202);await service.autopilot.tick({lane:'generation'});await q('/autopilot/'+id+'/destination',{baseUrl:'https://'+id+'.example/',username:'fixture-user',password:'fixture-secret'});return {id,projectId:project.id};};
  const approve=async id=>{const p=await q('/autopilot/'+id+'/html');return q('/autopilot/'+id+'/approve',{reviewToken:p.reviewToken});};
- return {dir,q,add,approve,opened,openModes,prepared,resumed,resets,written,publicVisits,trashed,holdTrash:fn=>{trashHook=fn;},loseTrashReply:()=>{lostTrashReply=true;trashProofAvailable=false;},restoreTrashProof:()=>{trashProofAvailable=true;},interruptTrash:()=>{stopBeforeTrash=true;},provePublished:()=>{canProvePublished=true;},get service(){return service;},run:id=>service.store.getRecord(id),solve:()=>{blocked=false;},challenge:()=>{blocked=true;},badVisual:value=>visualProblem=value,closedFinish:()=>{finishThrows=true;},holdReset:fn=>{resetHook=fn;},ticks:async(n=6)=>{for(let i=0;i<n;i++)await service.tick();},restart:async({desktop=settings.desktop}={})=>{await service.close();service=await createLifecycleService({...settings,desktop});}};
+ return {dir,q,add,approve,opened,openModes,prepared,resumed,resets,written,publicVisits,trashed,interruptPublication:()=>{interruptPublication=true;},setPublicationProof:proof=>{publicationProof=proof;},holdTrash:fn=>{trashHook=fn;},loseTrashReply:()=>{lostTrashReply=true;trashProofAvailable=false;},restoreTrashProof:()=>{trashProofAvailable=true;},interruptTrash:()=>{stopBeforeTrash=true;},provePublished:()=>{canProvePublished=true;},get service(){return service;},run:id=>service.store.getRecord(id),solve:()=>{blocked=false;},challenge:()=>{blocked=true;},badVisual:value=>visualProblem=value,closedFinish:()=>{finishThrows=true;},holdReset:fn=>{resetHook=fn;},ticks:async(n=6)=>{for(let i=0;i<n;i++)await service.tick();},restart:async({desktop=settings.desktop}={})=>{await service.close();service=await createLifecycleService({...settings,desktop});}};
 }
 test('desktop publication releases the turn without public verification and persists manual decisions',async t=>{
  const f=await fixture(t,{manualReview:true}),a=await f.add('First live page'),b=await f.add('Second live page');
@@ -287,6 +301,7 @@ test('explicit parking closes the challenged context and preserves the run acros
  f.holdReset(null);assert.equal((await park()).status,200);assert.equal(f.service.autopilot.publicationTurn.owner(),null);
  await f.restart();f.solve();await f.ticks(12);
  const parked=f.run(a.id);assert.ok(parked.publicationParked);assert.equal(parked.state,'needs_attention');assert.deepEqual(parked.publicationApproval,before.publicationApproval);assert.deepEqual(parked.candidate,before.candidate);assert.deepEqual(f.written,[b.id]);
+ assert.equal((await f.q('/project-queue')).projects.find(project=>project.projectId===a.projectId).items[0].canResumeParked,true);
  assert.equal((await f.q('/autopilot/'+a.id+'/resume',{})).status,202);await f.ticks(10);assert.deepEqual(f.written,[b.id,a.id]);
 });
 
@@ -302,7 +317,236 @@ test('parking a paused project retains its pinned donor and unknown creation acr
  assert.deepEqual(f.written,[b.id]);assert.equal(f.run(a.id).donorPinned,true);assert.deepEqual(f.run(a.id).candidate,run.candidate);assert.deepEqual(f.run(a.id).nativePublication,checkpoint);
  assert.equal((await f.q('/autopilot/'+a.id+'/resume',{})).status,409);
  await f.q(projectRoute,{action:'resume'});
+ const row=(await f.q('/project-queue')).projects.find(project=>project.projectId===a.projectId).items[0];
+ assert.equal(row.canResumeParked,false);
+ assert.ok(row.parkedResumeBlockedReason);
+ assert.equal(row.publication.canReconcile,false);
  assert.notEqual((await f.q('/autopilot/'+a.id+'/resume',{})).status,202);
  assert.equal(f.run(a.id).publicationParked,true);assert.equal(f.service.autopilot.publicationTurn.owner(),null);
  await f.ticks(3);assert.deepEqual(f.written,[b.id]);
+});
+
+test('a paused queue never advertises its ready page as approvable',async t=>{
+ const f=await fixture(t),a=await f.add('Ready for review'),projectRoute='/projects/'+a.projectId+'/queue';
+ const ready=async()=>(await f.q('/project-queue')).projects[0];
+ assert.equal((await ready()).items[0].canApprove,true);
+ await f.q(projectRoute,{action:'pause'});
+ const paused=await ready();
+ assert.equal(paused.items[0].canApprove,false);
+ assert.equal(paused.publicationPlan.token,null);
+ const preview=await f.q('/autopilot/'+a.id+'/html');
+ assert.equal((await f.q('/project-queue/approve',{items:[{id:a.id,reviewToken:preview.reviewToken}]})).status,409);
+ await f.q(projectRoute,{action:'resume'});
+ assert.equal((await ready()).items[0].canApprove,true);
+});
+
+test('queue retry capability follows the project pause and active worker lease',async t=>{
+ const f=await fixture(t),a=await f.add('Waiting for WordPress login');
+ await f.approve(a.id);await f.ticks(5);
+ const queue='/projects/'+a.projectId+'/queue',retry='/project-queue/items/'+a.id+'/retry';
+ const item=async()=>(await f.q('/project-queue')).projects[0].items[0];
+ assert.equal(f.run(a.id).error.code,'BROWSER_CAPTCHA_REQUIRED');
+ assert.equal((await item()).canRetry,true);
+ await f.q(queue,{action:'pause'});
+ assert.equal((await item()).canRetry,false);
+ assert.equal((await f.q(retry,{})).status,409);
+ await f.q(queue,{action:'resume'});
+ let run=f.run(a.id);f.service.store.updateRecord(a.id,{leaseToken:'active-fixture',leaseUntil:new Date(Date.now()+60_000).toISOString()},run.revision);
+ assert.equal((await item()).canRetry,false);
+ run=f.run(a.id);f.service.store.updateRecord(a.id,{leaseToken:null,leaseUntil:null},run.revision);
+ assert.equal((await item()).canRetry,true);
+ f.solve();assert.equal((await f.q(retry,{})).status,200);await f.ticks(7);
+ assert.deepEqual(f.written,[a.id]);
+});
+
+test('a failed import row offers retry before it has a run',async t=>{
+ const f=await fixture(t),imported=await f.q('/project-queue/import',{name:'Retryable import',type:'html',idempotencyKey:crypto.randomUUID(),items:[{key:'fixture',source:'html',html:'<h1>Imported fixture</h1>',language:'en',geo:'GB'}]});
+ assert.equal(imported.status,201);
+ const [record]=f.service.store.listRecords(imported.project.id,'project_queue_item');
+ f.service.store.updateRecord(record.id,{state:'failed',error:{code:'IMPORT_VALIDATION'}},record.revision);
+ const [row]=(await f.q('/project-queue')).projects[0].items;
+ assert.equal(row.runId,null);
+ assert.equal(row.canRetry,true);
+ const response=await f.q('/project-queue/items/'+row.id+'/retry',{});
+ assert.equal(response.status,200);
+ assert.equal(response.item.state,'waiting');
+ assert.equal(response.item.canRetry,false);
+});
+
+test('a paused reopened project cannot reclaim the publication turn through reconciliation',async t=>{
+ const f=await fixture(t),first=await f.add('Closed then reopened'),next=await f.add('Independent next publication');
+ f.solve();f.interruptPublication();await f.approve(first.id);await f.approve(next.id);await f.ticks(5);
+ assert.equal(f.run(first.id).nativePublication.phase,'dispatching');
+ const change=async action=>f.q('/projects/'+first.projectId+'/lifecycle',{action,expectedRevision:f.service.store.getProject(first.projectId).revision});
+ assert.equal((await change('close')).status,200);
+ await f.service.autopilot.publicationTurn.retireInactive();
+ assert.equal(f.service.autopilot.publicationTurn.owner()?.id,undefined);
+ assert.equal((await change('reopen')).status,200);
+ const overview=(await f.q('/project-queue')).projects.find(project=>project.projectId===first.projectId);
+ const openedBefore=f.opened.length;
+ const result=await f.q('/autopilot/'+first.id+'/reconcile',{expectedRevision:overview.items[0].publication.revision});
+ assert.equal(result.status,409);
+ assert.equal(f.opened.length,openedBefore);
+ assert.equal(f.service.autopilot.publicationTurn.owner()?.id,undefined);
+ assert.equal(overview.paused,true);
+ assert.equal(overview.items[0].publication.canReconcile,false);
+ await f.ticks(10);
+ assert.equal(f.run(next.id).state,'completed');
+ assert.deepEqual(f.written,[first.id,next.id]);
+});
+
+async function parkUnconfirmedPublication(t){
+ const f=await fixture(t),first=await f.add('Parked with a known WordPress ID'),next=await f.add('Next in queue');
+ f.solve();f.interruptPublication();await f.approve(first.id);await f.approve(next.id);await f.ticks(5);
+ const stopped=f.run(first.id);
+ assert.equal(stopped.state,'uncertain');
+ assert.equal(stopped.nativePublication.phase,'dispatching');
+ const parked=await f.q('/project-queue/items/'+first.id+'/park',{});
+ assert.equal(parked.status,200);
+ assert.equal(parked.item.publication.canReconcile,true);
+ const reconcile=async()=>f.q('/autopilot/'+first.id+'/reconcile',{expectedRevision:f.run(first.id).revision});
+ return {f,first,next,stopped,reconcile};
+}
+
+test('confirming a parked publication resumes checking and releases the serial turn',async t=>{
+ const {f,first,next,reconcile}=await parkUnconfirmedPublication(t);
+ f.setPublicationProof('published');
+ const result=await reconcile();
+ assert.equal(result.status,200,JSON.stringify(result));
+ assert.equal(result.observation,'published');
+ await f.ticks(10);
+ assert.equal(f.run(first.id).state,'completed');
+ assert.equal(f.run(first.id).publicationParked,false);
+ assert.equal(f.run(next.id).state,'completed');
+ assert.equal(f.service.autopilot.publicationTurn.owner()?.id,undefined);
+ assert.deepEqual(f.written,[first.id,next.id]);
+});
+
+for(const proof of ['draft','unknown'])test(`a parked reconciliation with ${proof} evidence leaves other pages free to publish`,async t=>{
+ const {f,first,next,stopped,reconcile}=await parkUnconfirmedPublication(t);
+ f.setPublicationProof(proof);
+ const result=await reconcile();
+ assert.equal(result.status,200,JSON.stringify(result));
+ assert.equal(result.observation,proof);
+ assert.equal(f.service.autopilot.publicationTurn.owner()?.id,undefined);
+ await f.ticks(10);
+ const parked=f.run(first.id);
+ assert.equal(parked.publicationParked,true);
+ assert.equal(parked.browserWindow,false);
+ assert.deepEqual(parked.nativePublication,stopped.nativePublication);
+ assert.deepEqual(parked.candidate,stopped.candidate);
+ assert.equal(f.run(next.id).state,'completed');
+ assert.deepEqual(f.written,[first.id,next.id]);
+});
+
+test('an inconclusive parked reconciliation retains its turn until the private window closes',async t=>{
+ const {f,first,next,reconcile}=await parkUnconfirmedPublication(t);
+ f.holdReset(async()=>{throw Error('Private window did not close');});
+ assert.equal((await reconcile()).observation,'unknown');
+ assert.equal(f.service.autopilot.publicationTurn.owner()?.id,first.id);
+ await f.ticks(3);
+ assert.equal(f.run(next.id).state,'queued');
+ f.holdReset(null);
+ assert.equal((await reconcile()).observation,'unknown');
+ assert.equal(f.service.autopilot.publicationTurn.owner()?.id,undefined);
+ await f.ticks(10);
+ assert.equal(f.run(next.id).state,'completed');
+});
+
+test('confirmed WordPress Trash replaces the old publication projection throughout the workspace',async t=>{
+ const f=await fixture(t,{manualReview:true}),a=await f.add('Published then trashed');
+ f.solve();await f.approve(a.id);await f.ticks(8);
+ const row=async()=>(await f.q('/project-queue')).projects[0].items[0];
+ const published=await row();
+ assert.equal(published.manualReview.state,'pending');
+ assert.equal((await f.q('/project-queue/items/'+a.id+'/published-review',{decision:'declined',expectedPageRevision:published.pageRevision})).status,200);
+ await f.ticks(3);
+ const trashed=await row(),run=(await f.q('/projects/'+a.projectId+'/autopilot')).runs[0];
+ assert.equal(trashed.manualReview.state,'trashed');
+ for(const item of [trashed,run]){
+  assert.equal(item.fullUrl,'');
+  assert.equal(item.publication.state,'trashed');
+  assert.equal(item.publication.url,null);
+  assert.equal(item.publication.canReconcile,false);
+ }
+ assert.deepEqual(f.trashed,[published.wpId]);
+});
+
+test('a confirmed trashed page exposes exact saved HTML without publication approval',async t=>{
+ const f=await fixture(t,{manualReview:true}),a=await f.add('Trashed preview');
+ const original=await f.q('/autopilot/'+a.id+'/html');
+ f.solve();await f.approve(a.id);await f.ticks(8);
+ const published=(await f.q('/project-queue')).projects[0].items[0];
+ const remote=f.service.store.getPage(published.pageId).remoteSnapshot;
+ const decline=await f.q('/project-queue/items/'+a.id+'/published-review',{decision:'declined',expectedPageRevision:published.pageRevision});
+ assert.equal(decline.status,200);
+ await f.ticks(3);
+ const preview=await f.q('/autopilot/'+a.id+'/html');
+ assert.equal(preview.status,200);
+ assert.equal(preview.html,remote.content);
+ assert.equal(preview.reviewToken,undefined);
+ const replay=await f.q('/autopilot/'+a.id+'/approve',{reviewToken:original.reviewToken});
+ assert.notEqual(replay.status,202);
+ assert.notEqual((await f.q('/autopilot/'+a.id+'/resume',{})).status,202);
+ assert.equal(f.run(a.id).state,'completed');
+ assert.deepEqual(f.written,[a.id]);
+});
+
+for(const verified of [true,false])test(`a reviewed page revision ${verified?'allows a fresh decline after the old result was proved absent':'keeps older uncertain Trash fenced'}`,async t=>{
+ const f=await fixture(t,{manualReview:true}),a=await f.add('Trash revision regression');
+ f.solve();await f.approve(a.id);await f.ticks(8);
+ const review=async()=>(await f.q('/project-queue')).projects[0].items[0];
+ const row=await review(),route='/project-queue/items/'+row.id+'/published-review';
+ const decline=(pageRevision,trashRevision)=>f.q(route,{decision:'declined',expectedPageRevision:pageRevision,...(trashRevision!==undefined?{expectedTrashRevision:trashRevision}:{})});
+ f.interruptTrash();assert.equal((await decline(row.pageRevision)).status,200);await f.ticks(3);
+ if(verified){f.provePublished();assert.equal((await decline(row.pageRevision)).status,200);await f.ticks(3);}
+ const old=await review();
+ assert.equal(old.manualReview.state,verified?'trash_failed':'trash_uncertain');
+ const page=f.service.store.getPage(row.pageId),snapshot=page.remoteSnapshot;
+ const content=snapshot.content.replace('Exact fixture content.','Updated fixture content.');
+ assert.notEqual(content,snapshot.content);
+ const contentHash=crypto.createHash('sha256').update(JSON.stringify(['page',snapshot.title,content,'publish'])).digest('hex');
+ f.service.store.updatePage(page.id,{remoteSnapshot:{...snapshot,content,contentHash}},page.revision);
+ const fresh=await review();
+ assert.notEqual(fresh.pageRevision,row.pageRevision);
+ assert.notEqual((await decline(row.pageRevision,old.manualReview.retryTrashRevision)).status,200);
+ if(!verified){
+  assert.equal(fresh.manualReview.canTrash,false);
+  assert.equal((await decline(fresh.pageRevision)).status,409);
+  await f.ticks(3);
+  assert.deepEqual(f.trashed,[]);
+  return;
+ }
+ assert.equal(fresh.manualReview.canTrash,true);
+ assert.equal((await decline(fresh.pageRevision,old.manualReview.retryTrashRevision)).status,409);
+ assert.equal((await decline(fresh.pageRevision)).status,200);
+ await f.ticks(4);
+ assert.equal((await review()).manualReview.state,'trashed');
+ assert.deepEqual(f.trashed,[row.wpId]);
+});
+
+test('a fresh decline cannot replace an older Trash action that still has an active callback',async t=>{
+ const f=await fixture(t,{manualReview:true}),a=await f.add('Trash callback race');
+ f.solve();await f.approve(a.id);await f.ticks(8);
+ const item=async()=>(await f.q('/project-queue')).projects[0].items[0];
+ const row=await item(),route='/project-queue/items/'+row.id+'/published-review';
+ const decline=revision=>f.q(route,{decision:'declined',expectedPageRevision:revision});
+ let enter,release;const entered=new Promise(resolve=>{enter=resolve;}),held=new Promise(resolve=>{release=resolve;});
+ f.holdTrash(async()=>{enter();await held;});
+ assert.equal((await decline(row.pageRevision)).status,200);
+ const tick=f.service.tick();
+ let revised;
+ try{
+  await Promise.race([entered,tick.then(()=>{throw Error('The Trash operation did not enter the private browser');})]);
+  const page=f.service.store.getPage(row.pageId);
+  revised=f.service.store.updatePage(page.id,{keyword:'New local note'},page.revision);
+  assert.equal((await decline(revised.revision)).status,409);
+  assert.equal((await item()).manualReview.state,'trash_queued');
+ }finally{release();await tick;}
+ assert.deepEqual(f.trashed,[]);
+ f.holdTrash(null);
+ assert.equal((await decline(revised.revision)).status,200);
+ await f.ticks(4);
+ assert.equal((await item()).manualReview.state,'trashed');
+ assert.deepEqual(f.trashed,[row.wpId]);
 });
